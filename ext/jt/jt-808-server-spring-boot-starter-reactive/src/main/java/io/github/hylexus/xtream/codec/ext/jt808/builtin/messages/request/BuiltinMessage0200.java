@@ -17,10 +17,12 @@
 package io.github.hylexus.xtream.codec.ext.jt808.builtin.messages.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import io.github.hylexus.xtream.codec.core.annotation.DerivedField;
 import io.github.hylexus.xtream.codec.core.annotation.Expression;
 import io.github.hylexus.xtream.codec.core.annotation.ext.*;
 import io.github.hylexus.xtream.codec.core.impl.codec.StringFieldCodecs;
 import io.github.hylexus.xtream.codec.core.type.Preset;
+import io.github.hylexus.xtream.codec.ext.jt808.builtin.messages.ext.location.BuiltinMessage0200Support.*;
 import io.github.hylexus.xtream.codec.ext.jt808.builtin.messages.ext.location.LocationItem0x64;
 import io.github.hylexus.xtream.codec.ext.jt808.builtin.messages.ext.location.LocationItem0x65;
 import io.github.hylexus.xtream.codec.ext.jt808.builtin.messages.ext.location.LocationItem0x66;
@@ -31,6 +33,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringJoiner;
 
 import static io.github.hylexus.xtream.codec.core.annotation.map.XtreamMapField.*;
@@ -41,14 +44,101 @@ import static io.github.hylexus.xtream.codec.core.type.XtreamDataType.*;
  * 位置信息汇报 0x0200
  *
  * @author hylexus
+ * @author opencode (AI)
  */
 @Jt808ResponseBody(messageId = 0x0200, desc = "位置信息汇报")
 public class BuiltinMessage0200 {
+
+    /// # 表25 报警预警标志位定义
+    ///
+    /// | 位   | 定义                                     | 处理说明                 |
+    /// | :--- | :--------------------------------------- | :----------------------- |
+    /// | 0    | 1:紧急报警,触动报警开关后触发            | 收到应答后清零           |
+    /// | 1    | 1:超速报警                               | 标志维持至报警条件解除   |
+    /// | 2    | 1:疲劳驾驶报警                           | 标志维持至报警条件解除   |
+    /// | 3    | 1:危险驾驶行为报警                       | 标志维持至报警条件解除   |
+    /// | 4    | 1:GNSS 模块发生故障报警                  | 标志维持至报警条件解除   |
+    /// | 5    | 1:GNSS 天线未接或被剪断报警              | 标志维持至报警条件解除   |
+    /// | 6    | 1:GNSS 天线短路报警                      | 标志维持至报警条件解除   |
+    /// | 7    | 1:终端主电源欠压报警                     | 标志维持至报警条件解除   |
+    /// | 8    | 1:终端主电源掉电报警                     | 标志维持至报警条件解除   |
+    /// | 9    | 1:终端 LCD 或显示器故障报警              | 标志维持至报警条件解除   |
+    /// | 10   | 1:TTS 模块故障报警                       | 标志维持至报警条件解除   |
+    /// | 11   | 1:摄像头故障报警                         | 标志维持至报警条件解除   |
+    /// | 12   | 1:道路运输证 IC 卡模块故障报警           | 标志维持至报警条件解除   |
+    /// | 13   | 1:超速预警                               | 标志维持至预警条件解除   |
+    /// | 14   | 1:疲劳驾驶预警                           | 标志维持至预警条件解除   |
+    /// | 15   | 1:违规行驶报警                           | 标志维持至报警条件解除   |
+    /// | 16   | 1:胎压预警                               | 标志维持至预警条件解除   |
+    /// | 17   | 1:右转盲区异常报警                       | 标志维持至报警条件解除   |
+    /// | 18   | 1:当天累计驾驶超时报警                   | 标志维持至报警条件解除   |
+    /// | 19   | 1:超时停车报警                           | 标志维持至报警条件解除   |
+    /// | 20   | 1:进出区域报警                           | 收到应答后清零           |
+    /// | 21   | 1:进出路线报警                           | 收到应答后清零           |
+    /// | 22   | 1:路段行驶时间不足/过长报警              | 收到应答后清零           |
+    /// | 23   | 1:路线偏离报警                           | 标志维持至报警条件解除   |
+    /// | 24   | 1:车辆 VSS 故障                          | 标志维持至报警条件解除   |
+    /// | 25   | 1:车辆油量异常报警                       | 标志维持至报警条件解除   |
+    /// | 26   | 1:车辆被盗报警(通过车辆防盗器)           | 标志维持至报警条件解除   |
+    /// | 27   | 1:车辆非法点火报警                       | 收到应答后清零           |
+    /// | 28   | 1:车辆非法位移报警                       | 收到应答后清零           |
+    /// | 29   | 1:碰撞侧翻报警                           | 标志维持至报警条件解除   |
+    /// | 30   | 1:侧翻预警                               | 标志维持至预警条件解除   |
+    /// | 31   | 保留                                     | —                        |
     @Preset.JtStyle.Dword(desc = "报警标志")
     private long alarmFlag;
 
+    /// # 表24 状态位定义
+    ///
+    /// | 位       | 状态                                                                 |
+    /// |----------|----------------------------------------------------------------------|
+    /// | 0        | 0:ACC 关;1: ACC 开                                                   |
+    /// | 1        | 0:未定位;1:定位                                                      |
+    /// | 2        | 0:北纬;1:南纬                                                        |
+    /// | 3        | 0:东经;1:西经                                                        |
+    /// | 4        | 0:运营状态;1:停运状态                                                |
+    /// | 5        | 0:经纬度未经保密插件加密;1:经纬度已经保密插件加密                     |
+    /// | 6        | 1:紧急刹车系统采集的前撞预警                                         |
+    /// | 7        | 1:车道偏移预警                                                       |
+    /// | 8 ~ 9    | 00:空车;01:半载;10:保留;11:满载。<br>可表示客车的空载状态,重车及货车的空载、满载状态,该状态可由人工输入或传感器获取 |
+    /// | 10       | 0:车辆油路正常;1:车辆油路断开                                        |
+    /// | 11       | 0:车辆电路正常;1:车辆电路断开                                        |
+    /// | 12       | 0:车门解锁;1:车门加锁                                                |
+    /// | 13       | 0:门 1 关;1:门 1 开(前门)                                            |
+    /// | 14       | 0:门 2 关;1:门 2 开(中门)                                            |
+    /// | 15       | 0:门 3 关;1:门 3 开(后门)                                            |
+    /// | 16       | 0:门 4 关;1:门 4 开(驾驶席门)                                        |
+    /// | 17       | 0:门 5 关;1:门 5 开(自定义)                                          |
+    /// | 18       | 0:未使用 GPS 卫星进行定位;1:使用 GPS 卫星进行定位                    |
+    /// | 19       | 0:未使用北斗卫星进行定位;1:使用北斗卫星进行定位                      |
+    /// | 20       | 0:未使用 GLONASS 卫星进行定位;1:使用 GLONASS 卫星进行定位            |
+    /// | 21       | 0:未使用 Galileo 卫星进行定位;1:使用 Galileo 卫星进行定位            |
+    /// | 22       | 0:车辆处于停止状态;1:车辆处于行驶状态                                |
+    /// | 23 ~ 31  | 保留                                                                 |
     @Preset.JtStyle.Dword(desc = "状态")
     private long status;
+
+    // ========== @DerivedField 使用示例 ==========
+
+    /// 「可选」示例1: EnumSetBitTransformer + reverseSource=true（回环编解码）
+    ///
+    /// alarmFlag 的 bit 位 → EnumSet<AlarmFlag>，编码时通过 write() 回写 alarmFlag
+    @DerivedField(source = "alarmFlag", using = AlarmFlagTransformer.class, reverseSource = true)
+    private transient Set<AlarmFlag> alarmFlags;
+
+    /// 「可选」示例2: 自定义 Transformer + reverseSource=false（只读衍生，不参与编码回写）
+    ///
+    /// alarmFlag → 人类可读的报警描述字符串，仅解码时计算，不影响编码
+    @DerivedField(source = "alarmFlag", using = AlarmDescriptionTransformer.class, reverseSource = false)
+    private transient String alarmDescription;
+
+    /// 「可选」示例3: EnumSetBitTransformer + reverseSource=true（回环编解码）
+    ///
+    /// status 的全部 bit（含独立标志 + `bit 8~9` 载货状态）→ EnumSet<StatusBit>，
+    ///
+    /// 编码时通过 write() 按位 OR 回写 status，不同 bitOffset 互不干扰
+    @DerivedField(source = "status", using = StatusBitTransformer.class, reverseSource = true)
+    private transient Set<StatusBit> statusFlags;
 
     @Preset.JtStyle.Dword(desc = "纬度")
     private long latitude;
@@ -183,6 +273,33 @@ public class BuiltinMessage0200 {
         return this;
     }
 
+    public @Nullable Set<AlarmFlag> getAlarmFlags() {
+        return alarmFlags;
+    }
+
+    public BuiltinMessage0200 setAlarmFlags(@Nullable Set<AlarmFlag> alarmFlags) {
+        this.alarmFlags = alarmFlags;
+        return this;
+    }
+
+    public @Nullable String getAlarmDescription() {
+        return alarmDescription;
+    }
+
+    public BuiltinMessage0200 setAlarmDescription(@Nullable String alarmDescription) {
+        this.alarmDescription = alarmDescription;
+        return this;
+    }
+
+    public @Nullable Set<StatusBit> getStatusFlags() {
+        return statusFlags;
+    }
+
+    public BuiltinMessage0200 setStatusFlags(@Nullable Set<StatusBit> statusFlags) {
+        this.statusFlags = statusFlags;
+        return this;
+    }
+
     public long getLatitude() {
         return latitude;
     }
@@ -250,7 +367,10 @@ public class BuiltinMessage0200 {
     public String toString() {
         return new StringJoiner(", ", BuiltinMessage0200.class.getSimpleName() + "[", "]")
                 .add("alarmFlag=" + alarmFlag)
+                .add("alarmFlags=" + alarmFlags)
+                .add("alarmDescription=" + alarmDescription)
                 .add("status=" + status)
+                .add("statusFlags=" + statusFlags)
                 .add("latitude=" + latitude)
                 .add("longitude=" + longitude)
                 .add("altitude=" + altitude)

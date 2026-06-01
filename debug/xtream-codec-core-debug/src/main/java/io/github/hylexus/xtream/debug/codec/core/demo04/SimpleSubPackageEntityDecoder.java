@@ -28,12 +28,18 @@ import io.github.hylexus.xtream.debug.codec.core.demo04.spec.SimpleCache;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.CompositeByteBuf;
+import org.jspecify.annotations.NullMarked;
 
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * @author hylexus
+ * @author opencode (AI)
+ */
+@NullMarked
 public class SimpleSubPackageEntityDecoder extends EntityDecoder {
 
     protected final SimpleCache cache;

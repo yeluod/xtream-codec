@@ -82,3 +82,66 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+## 5. Code Conventions
+
+**These rules must be followed in ALL generated code.**
+
+### 5.1 @since Tag Version
+
+When adding `@since` to JavaDoc, the value MUST match `projectVersion` in `gradle.properties`.
+
+- Current version: `0.6.0` (`projectVersion=0.6.0` in `gradle.properties`)
+- New APIs added now → `@since 0.6.0`
+- Do NOT hardcode outdated versions; always check `gradle.properties` first.
+
+```java
+// Correct (new code):
+/**
+ * @since 0.6.0
+ */
+default boolean isDerived() { return false; }
+
+// Wrong (version doesn't match gradle.properties):
+/**
+ * @since 0.4.0
+ */
+default boolean isDerived() { return false; }
+```
+
+### 5.2 @Nullable Placement (Jspecify)
+
+`@Nullable` is a **type-use annotation**. It MUST be placed immediately before the type it modifies, NOT on a separate line before the method declaration.
+
+```java
+// Correct — @Nullable before the return type:
+public @Nullable String getDisplayName() { ... }
+default @Nullable Object getProperty(Object instance) { ... }
+public static @Nullable String getVariable(String name) { ... }
+
+// Wrong — @Nullable on its own line before default/modifier:
+// @Nullable         ← wrong
+// default Object getProperty(...) { ... }
+
+// Wrong — @Nullable separated from the return type by a modifier:
+// @Nullable private String name;              ← wrong
+// private @Nullable String name;              ← correct (no modifier between @Nullable and the type)
+```
+
+Rationale: Per [Jspecify 1.0](https://jspecify.dev/), type-use annotations should be adjacent to the annotated type to avoid ambiguity about what they modify.
+
+### 5.3 Comment Language
+
+All code comments (including JavaDoc, inline comments, TODO, FIXME, etc.) MUST be written in **Simplified Chinese** unless the comment targets an international audience (e.g., SPI interface docs meant for external contributors).
+
+```java
+// Correct (简体中文):
+// 将状态码转换为业务枚举
+@Nullable
+StatusEnum resolveStatusCode(int code);
+
+// Wrong (English comments in Chinese project):
+// Convert status code to business enum
+@Nullable
+StatusEnum resolveStatusCode(int code);
+```

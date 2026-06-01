@@ -16,8 +16,11 @@
 
 package io.github.hylexus.xtream.codec.ext.jt808.builtin.messages.request;
 
+import io.github.hylexus.xtream.codec.common.utils.XtreamBitOperator;
 import io.github.hylexus.xtream.codec.ext.jt808.builtin.messages.BaseCodecTest;
 import io.github.hylexus.xtream.codec.ext.jt808.builtin.messages.ext.location.AlarmIdentifier;
+import io.github.hylexus.xtream.codec.ext.jt808.builtin.messages.ext.location.BuiltinMessage0200Support.AlarmFlag;
+import io.github.hylexus.xtream.codec.ext.jt808.builtin.messages.ext.location.BuiltinMessage0200Support.StatusBit;
 import io.github.hylexus.xtream.codec.ext.jt808.builtin.messages.ext.location.LocationItem0x64;
 import io.github.hylexus.xtream.codec.ext.jt808.spec.Jt808ProtocolVersion;
 import org.junit.jupiter.api.Test;
@@ -25,9 +28,13 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * @author opencode (AI)
+ */
 class BuiltinMessage0200Test extends BaseCodecTest {
 
     final LocalDateTime time = LocalDateTime.of(2014, 10, 21, 19, 51, 9);
@@ -72,6 +79,73 @@ class BuiltinMessage0200Test extends BaseCodecTest {
 
             compareItem64(expectedExtraItems, actualExtraItems);
 
+            // ===== @DerivedField 断言 =====
+            assertEquals(Set.of(
+                    AlarmFlag.EMERGENCY, AlarmFlag.OVERSPEED, AlarmFlag.DANGEROUS_DRIVING,
+                    AlarmFlag.GNSS_FAULT, AlarmFlag.GNSS_ANTENNA_CUT, AlarmFlag.GNSS_ANTENNA_SHORT
+            ), actual.getAlarmFlags());
+            assertEquals("紧急报警 | 超速报警 | 危险驾驶行为报警 | GNSS 模块故障 | GNSS 天线未接或被剪断 | GNSS 天线短路",
+                    actual.getAlarmDescription());
+            assertEquals(Set.of(
+                    StatusBit.GPS_LOCKED, StatusBit.SOUTH_LATITUDE, StatusBit.WEST_LONGITUDE,
+                    StatusBit.STOPPED, StatusBit.FCW, StatusBit.LDW,
+                    StatusBit.CARGO_EMPTY
+            ), actual.getStatusFlags());
+
+        }, true);
+    }
+
+    @Test
+    void test2() {
+        final BuiltinMessage0200 entity = createEntity1();
+        entity.setAlarmFlag(XtreamBitOperator.immutable()
+                .set(AlarmFlag.EMERGENCY.bitOffset())
+                .set(AlarmFlag.FATIGUE_DRIVING.bitOffset())
+                .set(AlarmFlag.ROLLOVER_WARNING.bitOffset())
+                .value()
+        );
+        entity.setStatus(XtreamBitOperator.immutable()
+                .set(StatusBit.ACC_ON.bitOffset())
+                .set(StatusBit.LDW.bitOffset())
+                .setRange(8, 2)
+                .value()
+        );
+
+        super.codec(Jt808ProtocolVersion.VERSION_2019, super.terminalId2019, entity, (expected, actual, hexString) -> {
+            assertEquals(Set.of(
+                    AlarmFlag.EMERGENCY, AlarmFlag.FATIGUE_DRIVING, AlarmFlag.ROLLOVER_WARNING
+            ), actual.getAlarmFlags());
+            assertEquals("紧急报警 | 疲劳驾驶报警 | 侧翻预警", actual.getAlarmDescription());
+
+            assertEquals(Set.of(
+                    StatusBit.ACC_ON, StatusBit.LDW, StatusBit.CARGO_FULL_LOADED
+            ), actual.getStatusFlags());
+        }, true);
+    }
+
+    @Test
+    void test3() {
+        final BuiltinMessage0200 entity = createEntity1();
+        entity.setAlarmFlag(0);
+        entity.setStatus(0);
+        entity.setAlarmFlags(Set.of(AlarmFlag.EMERGENCY, AlarmFlag.OVERSPEED));
+        entity.setStatusFlags(Set.of(StatusBit.ACC_ON, StatusBit.GPS_LOCKED));
+
+        super.codec(Jt808ProtocolVersion.VERSION_2019, super.terminalId2019, entity, (expected, actual, hexString) -> {
+            final long expectedAlarmFlag = XtreamBitOperator.immutable()
+                    .set(AlarmFlag.EMERGENCY.bitOffset())
+                    .set(AlarmFlag.OVERSPEED.bitOffset())
+                    .value();
+            assertEquals(expectedAlarmFlag, actual.getAlarmFlag());
+            assertEquals(Set.of(AlarmFlag.EMERGENCY, AlarmFlag.OVERSPEED), actual.getAlarmFlags());
+
+            final int expectedStatus = (int) XtreamBitOperator.immutable()
+                    .set(StatusBit.ACC_ON.bitOffset())
+                    .set(StatusBit.GPS_LOCKED.bitOffset())
+                    .value();
+            assertEquals(expectedStatus, actual.getStatus());
+            // bits 8~9 为 0b00，对应 CARGO_EMPTY（空车）
+            assertEquals(Set.of(StatusBit.ACC_ON, StatusBit.GPS_LOCKED, StatusBit.CARGO_EMPTY), actual.getStatusFlags());
         }, true);
     }
 
@@ -102,8 +176,24 @@ class BuiltinMessage0200Test extends BaseCodecTest {
 
     private BuiltinMessage0200 createEntity1() {
         final BuiltinMessage0200 entity = new BuiltinMessage0200();
-        entity.setAlarmFlag(123L);
-        entity.setStatus(222);
+        entity.setAlarmFlag(XtreamBitOperator.immutable()
+                .set(AlarmFlag.EMERGENCY.bitOffset())
+                .set(AlarmFlag.OVERSPEED.bitOffset())
+                .set(AlarmFlag.DANGEROUS_DRIVING.bitOffset())
+                .set(AlarmFlag.GNSS_FAULT.bitOffset())
+                .set(AlarmFlag.GNSS_ANTENNA_CUT.bitOffset())
+                .set(AlarmFlag.GNSS_ANTENNA_SHORT.bitOffset())
+                .value()
+        );
+        entity.setStatus(XtreamBitOperator.immutable()
+                .set(StatusBit.GPS_LOCKED.bitOffset())
+                .set(StatusBit.SOUTH_LATITUDE.bitOffset())
+                .set(StatusBit.WEST_LONGITUDE.bitOffset())
+                .set(StatusBit.STOPPED.bitOffset())
+                .set(StatusBit.FCW.bitOffset())
+                .set(StatusBit.LDW.bitOffset())
+                .value()
+        );
         entity.setLatitude(31000562);
         entity.setLongitude(121451372);
         entity.setAltitude(666);

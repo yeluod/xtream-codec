@@ -49,6 +49,8 @@
 - 临时解决方案: 临时禁用掉 idea 内置的 `Spark` 插件
 - 详情参考: [https://youtrack.jetbrains.com/issue/IDEA-386409](https://youtrack.jetbrains.com/issue/IDEA-386409)
 
+> AI 生成的代码都会有标记，比如 `@author opencode (AI)`
+
 ## ProjectNaming / 项目命名
 
 项目名来源: `xtream-codec == xtream + codec`
@@ -183,9 +185,12 @@ docker run -it --rm -p 8888:8888 registry.cn-hangzhou.aliyuncs.com/xtream-codec/
 
 ![有钱的捧个钱场 没钱的捧个人场](https://hylexus.github.io/xtream-codec/img/pay.png)
 
-## References / 参考资料
+## References / 参考资料 / 致谢
 
+- [https://github.com/anomalyco/opencode](https://github.com/anomalyco/opencode)
 - [https://github.com/forrestchang/andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills)
+- [https://github.com/Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec)
+- [https://github.com/code-yeongyu/oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)
 
 ## TODO / 待办
 

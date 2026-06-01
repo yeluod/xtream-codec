@@ -16,8 +16,14 @@
 
 package io.github.hylexus.xtream.codec.core.utils;
 
+import io.github.hylexus.xtream.codec.common.bean.BeanMetadata;
+import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
+import io.github.hylexus.xtream.codec.core.FieldTransformer;
+import io.github.hylexus.xtream.codec.core.annotation.DerivedField;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.MergedAnnotation;
 import org.springframework.core.annotation.MergedAnnotations;
 
@@ -25,9 +31,11 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 
 /**
  * @author hylexus
+ * @author opencode (AI)
  */
 public final class XtreamFieldUtils {
 
@@ -47,6 +55,10 @@ public final class XtreamFieldUtils {
         return CACHE.computeIfAbsent(element, e -> {
             final List<XtreamField> fields = resolveAnnotations(e);
             if (fields.isEmpty()) {
+                // 如果只有 @DerivedField 没有显式 @XtreamField，返回空让 DerivedField 逻辑处理
+                if (MergedAnnotations.from(e).isPresent(DerivedField.class)) {
+                    return List.of();
+                }
                 return List.of(generateTransientFieldProxyInstance(element));
             }
 
@@ -315,6 +327,134 @@ public final class XtreamFieldUtils {
         return defaultVersion;
     }
 
+    /**
+     * 从 {@link AnnotatedElement} 中解析所有 {@link DerivedField @DerivedField} 注解（含 {@code @Repeatable}）。
+     */
+    public static List<DerivedField> resolveDerivedFieldAnnotations(AnnotatedElement element) {
+        final MergedAnnotations annotations = MergedAnnotations.from(element);
+        if (annotations.isPresent(DerivedField.class)) {
+            return annotations.stream(DerivedField.class)
+                    .map(MergedAnnotation::synthesize)
+                    .toList();
+        }
+        return List.of();
+    }
+
+    /**
+     * 从多个 {@link DerivedField @DerivedField} 中匹配目标版本。
+     * <p>
+     * 匹配逻辑与 {@link #matchVersion(int, List)} 一致：
+     * <ol>
+     *   <li>精确匹配目标版本 → 立即返回</li>
+     *   <li>无精确匹配，有 {@link DerivedField#ALL_VERSION} → 返回遇到的第一个默认版本</li>
+     *   <li>无精确匹配也无默认版本 → 返回 {@code null}</li>
+     * </ol>
+     */
+    public static @Nullable DerivedField matchDerivedFieldVersion(int targetVersion, List<DerivedField> annotations) {
+        DerivedField fallback = null;
+        for (final DerivedField annotation : annotations) {
+            for (final int version : annotation.version()) {
+                if (version == targetVersion) {
+                    return annotation;
+                } else if (version == DerivedField.ALL_VERSION && fallback == null) {
+                    fallback = annotation;
+                }
+            }
+        }
+        return fallback;
+    }
+
+    /**
+     * Creates a synthetic {@link XtreamField} proxy with {@link XtreamField.CodecStrategy#TRANSIENT}
+     * for fields that don't have a real {@link XtreamField} annotation (e.g., {@code @DerivedField} fields).
+     *
+     * @since 0.6.0
+     */
+    public static XtreamField createTransientFieldProxy(Field field) {
+        return generateTransientFieldProxyInstance(field);
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(XtreamFieldUtils.class);
+
+    /**
+     * 内联派生字段求值：源字段解码后立即查询 {@link BeanMetadata#getDerivedBySource()} 并计算派生值。
+     *
+     * @param sourceValue  源字段解码值
+     * @param sourceName   源字段名
+     * @param beanMetadata 当前 Bean 元数据
+     * @param consumer     接收 (派生字段元数据, 派生值) 的回调，由调用方决定如何消费派生值
+     */
+    public static void applyDerivedFieldsInline(
+            @Nullable Object sourceValue,
+            String sourceName,
+            BeanMetadata beanMetadata,
+            BiConsumer<BeanPropertyMetadata, @Nullable Object> consumer) {
+
+        if (sourceValue == null) {
+            return;
+        }
+        final List<BeanPropertyMetadata> derivedFields = beanMetadata.getDerivedBySource().get(sourceName);
+        if (derivedFields == null) {
+            return;
+        }
+        for (final BeanPropertyMetadata derived : derivedFields) {
+            final FieldTransformer<?, ?> transformer = derived.derivedTransformer();
+            if (transformer == null) {
+                continue;
+            }
+            try {
+                final Object derivedValue = readUnchecked(transformer, sourceValue);
+                consumer.accept(derived, derivedValue);
+            } catch (Exception e) {
+                log.warn("Failed to transform derived field [{}] from source [{}]", derived.name(), sourceName, e);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <S, T> @Nullable T readUnchecked(FieldTransformer<S, T> transformer, @Nullable Object sourceValue) {
+        return transformer.read((S) sourceValue);
+    }
+
+    /**
+     * 解析编码值：如有 reverseSource 派生字段，从派生字段取值并逆变换后返回；
+     * 否则返回源字段的原始 Getter 值。
+     *
+     * @param sourceProperty 当前正在编码的源字段元数据
+     * @param instance       实体实例
+     * @param beanMetadata   当前 Bean 元数据
+     * @return 实际应写入 ByteBuf 的值
+     */
+    public static @Nullable Object resolveEncodingValue(
+            BeanPropertyMetadata sourceProperty,
+            Object instance,
+            BeanMetadata beanMetadata) {
+
+        // 快速路径 大多数情况没有衍生字段
+        if (!beanMetadata.hasDerivedFields()) {
+            return sourceProperty.getProperty(instance);
+        }
+        final BeanPropertyMetadata reverseDerived = beanMetadata.getReverseDerivedBySource().get(sourceProperty.name());
+        if (reverseDerived != null) {
+            final Object derivedValue = reverseDerived.getProperty(instance);
+            if (derivedValue != null) {
+                final FieldTransformer<?, ?> transformer = reverseDerived.derivedTransformer();
+                if (transformer != null) {
+                    try {
+                        return writeUnchecked(transformer, derivedValue);
+                    } catch (UnsupportedOperationException e) {
+                        log.debug("write() not supported for derived field [{}], using source value", reverseDerived.name());
+                    }
+                }
+            }
+        }
+        return sourceProperty.getProperty(instance);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <S, T> @Nullable S writeUnchecked(FieldTransformer<S, T> transformer, @Nullable Object derivedValue) {
+        return transformer.write((T) derivedValue);
+    }
 
     public static boolean isVersionMatched(int targetVersion, int[] versionCandidates) {
         boolean foundDefault = false;

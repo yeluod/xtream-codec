@@ -26,9 +26,14 @@ import org.slf4j.LoggerFactory;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Constructor;
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.util.*;
 
+import static java.util.Collections.emptyMap;
+
+/**
+ * @author hylexus
+ * @author opencode (AI)
+ */
 public class BeanMetadata {
     private static final Logger log = LoggerFactory.getLogger(BeanMetadata.class);
     private final Class<?> rawType;
@@ -36,16 +41,43 @@ public class BeanMetadata {
     private final List<BeanPropertyMetadata> propertyMetadataList;
     private final ObjectInstantiator instantiator;
 
+    // 源字段名 → 依赖它的派生字段列表（解码内联求值用）
+    private final Map<String, List<BeanPropertyMetadata>> derivedBySource;
+    // 源字段名 → 唯一的 reverseSource 派生字段（编码内联值替换用，至多一个)
+    private final Map<String, BeanPropertyMetadata> reverseDerivedBySource;
+    // 属性名 → 在 propertyMetadataList 中的下标（Record 构造器参数数组 定位用）
+    private final Map<String, Integer> propertyIndex;
+    // 缓存是否有派生字段，避免 decode/encode 热路径中反复查询 Map.isEmpty()
+    private final boolean hasDerivedFields;
+
     public BeanMetadata(Class<?> rawType, Constructor<?> constructor, List<BeanPropertyMetadata> propertyMetadataList) {
+        this(rawType, constructor, propertyMetadataList, emptyMap(), emptyMap());
+    }
+
+    public BeanMetadata(Class<?> rawType, Constructor<?> constructor, List<BeanPropertyMetadata> propertyMetadataList,
+                        Map<String, List<BeanPropertyMetadata>> derivedBySource,
+                        Map<String, BeanPropertyMetadata> reverseDerivedBySource) {
         this.rawType = rawType;
         this.constructor = constructor;
         this.propertyMetadataList = propertyMetadataList;
         this.instantiator = createInstantiator(rawType, constructor);
+        this.derivedBySource = derivedBySource;
+        this.reverseDerivedBySource = reverseDerivedBySource;
+        this.propertyIndex = buildPropertyIndex(propertyMetadataList);
+        this.hasDerivedFields = !derivedBySource.isEmpty();
+    }
+
+    private static Map<String, Integer> buildPropertyIndex(List<BeanPropertyMetadata> list) {
+        final Map<String, Integer> idx = new HashMap<>();
+        for (int i = 0; i < list.size(); i++) {
+            idx.put(list.get(i).name(), i);
+        }
+        return Collections.unmodifiableMap(idx);
     }
 
     // todo: TypeParameterUnusedInFormals
     @SuppressWarnings("TypeParameterUnusedInFormals")
-    public <T> T createNewRecordInstance(Object[] filedValues) {
+    public <T> T createNewRecordInstance(@Nullable Object[] filedValues) {
         final Object newInstance = this.instantiator.newInstanceIgnoreException(filedValues);
         // final Object newInstance = BeanUtils.createNewInstance(this.getConstructor(), filedValues);
         @SuppressWarnings("unchecked") final T casted = (T) newInstance;
@@ -138,6 +170,43 @@ public class BeanMetadata {
 
     public List<BeanPropertyMetadata> getPropertyMetadataList() {
         return propertyMetadataList;
+    }
+
+    /**
+     * @return 是否有任意 {@code @DerivedField} 字段；无派生字段时编解码可直接跳过内联逻辑
+     * @since 0.6.0
+     */
+    public boolean hasDerivedFields() {
+        return this.hasDerivedFields;
+    }
+
+    /**
+     * @return 源字段名 → 依赖它的派生字段列表；解码时源字段求值后立即计算派生值
+     * @since 0.6.0
+     */
+    public Map<String, List<BeanPropertyMetadata>> getDerivedBySource() {
+        return this.derivedBySource;
+    }
+
+    /**
+     * @return 源字段名 → 唯一的 reverseSource 派生字段；编码时用派生字段的 Getter + 逆变换替代源字段的值
+     * @since 0.6.0
+     */
+    public Map<String, BeanPropertyMetadata> getReverseDerivedBySource() {
+        return this.reverseDerivedBySource;
+    }
+
+    /**
+     * @param propertyName 属性名
+     * @return 该属性在 {@link #getPropertyMetadataList()} 中的下标
+     * @since 0.6.0
+     */
+    public int propertyIndex(String propertyName) {
+        final Integer idx = this.propertyIndex.get(propertyName);
+        if (idx == null) {
+            throw new IllegalArgumentException("Unknown property: " + propertyName);
+        }
+        return idx;
     }
 
 }

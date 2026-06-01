@@ -23,10 +23,15 @@ import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
 import io.github.hylexus.xtream.codec.core.impl.DefaultSerializeContext;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.type.simple.DataField;
+import io.github.hylexus.xtream.codec.core.utils.XtreamFieldUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import org.jspecify.annotations.Nullable;
 
+/**
+ * @author hylexus
+ * @author opencode (AI)
+ */
 public class EntityEncoder {
     protected final ByteBufAllocator bufferFactory = ByteBufAllocator.DEFAULT;
     private final BeanMetadataRegistry beanMetadataRegistry;
@@ -82,11 +87,19 @@ public class EntityEncoder {
             return;
         }
         final FieldCodec.SerializeContext context = new DefaultSerializeContext(this.bufferFactory, this, instance, version, this.beanMetadataRegistry, null);
+        encodeFields(beanMetadata, instance, target, context);
+    }
+
+    private void encodeFields(BeanMetadata beanMetadata, Object instance, ByteBuf target, FieldCodec.SerializeContext context) {
         for (final BeanPropertyMetadata propertyMetadata : beanMetadata.getPropertyMetadataList()) {
+            if (propertyMetadata.isDerived()) {
+                continue;
+            }
             if (propertyMetadata.xtreamFieldAnnotation().codecStrategy() == XtreamField.CodecStrategy.TRANSIENT) {
                 continue;
             }
-            final Object value = propertyMetadata.getProperty(instance);
+            // 内联 reverseSource：从派生字段取值 + 逆变换，替代源字段的原始值
+            final Object value = resolveEncodingValue(propertyMetadata, instance, beanMetadata);
             context.evaluationContext().setVariable(propertyMetadata.name(), value);
 
             if (value == null) {
@@ -146,10 +159,13 @@ public class EntityEncoder {
             tracker.getRootSpan().setEntityClass(beanMetadata.getRawType().getName());
         }
         for (final BeanPropertyMetadata propertyMetadata : beanMetadata.getPropertyMetadataList()) {
+            if (propertyMetadata.isDerived()) {
+                continue;
+            }
             if (propertyMetadata.xtreamFieldAnnotation().codecStrategy() == XtreamField.CodecStrategy.TRANSIENT) {
                 continue;
             }
-            final Object value = propertyMetadata.getProperty(instance);
+            final Object value = resolveEncodingValue(propertyMetadata, instance, beanMetadata);
             context.evaluationContext().setVariable(propertyMetadata.name(), value);
 
             if (value == null) {
@@ -177,4 +193,9 @@ public class EntityEncoder {
     public XtreamExpressionFactory expressionFactory() {
         return this.expressionFactory;
     }
+
+    private static @Nullable Object resolveEncodingValue(BeanPropertyMetadata sourceProperty, Object instance, BeanMetadata beanMetadata) {
+        return XtreamFieldUtils.resolveEncodingValue(sourceProperty, instance, beanMetadata);
+    }
+
 }

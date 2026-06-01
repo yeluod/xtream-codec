@@ -19,6 +19,7 @@ package io.github.hylexus.xtream.codec.common.bean;
 import io.github.hylexus.xtream.codec.core.BeanMetadataRegistry;
 import io.github.hylexus.xtream.codec.core.ContainerInstanceFactory;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
+import io.github.hylexus.xtream.codec.core.FieldTransformer;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
 import io.netty.buffer.ByteBuf;
 import org.jspecify.annotations.Nullable;
@@ -29,6 +30,10 @@ import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.util.Optional;
 
+/**
+ * @author hylexus
+ * @author opencode (AI)
+ */
 public interface BeanPropertyMetadata {
 
     static <A extends Annotation> Optional<A> findAnnotation(Class<A> annotationClass, AnnotatedElement targetClass) {
@@ -127,6 +132,38 @@ public interface BeanPropertyMetadata {
     @Nullable
     default Object getProperty(Object instance) {
         return this.propertyGetter().getProperty(this, instance);
+    }
+
+    /**
+     * @return {@code true} if this property is a derived field (not read from {@code ByteBuf})
+     * @since 0.6.0
+     */
+    default boolean isDerived() {
+        return false;
+    }
+
+    /**
+     * @return {@code true} if this derived field should write back to its source during encoding
+     * @since 0.6.0
+     */
+    default boolean reverseSource() {
+        return false;
+    }
+
+    /**
+     * @return the name of the source field this derived field depends on
+     * @since 0.6.0
+     */
+    default @Nullable String derivedSource() {
+        return null;
+    }
+
+    /**
+     * @return the {@link FieldTransformer} used to convert between source and derived values
+     * @since 0.6.0
+     */
+    default @Nullable FieldTransformer<?, ?> derivedTransformer() {
+        return null;
     }
 
     BeanMetadataRegistry beanMetadataRegistry();

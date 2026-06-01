@@ -34,6 +34,10 @@ import java.lang.reflect.*;
 import java.util.*;
 import java.util.function.Predicate;
 
+/**
+ * @author hylexus
+ * @author opencode (AI)
+ */
 public final class BeanUtils {
     public static final BasicPropertyDescriptor[] EMPTY_ARRAY = {};
 
@@ -353,15 +357,9 @@ public final class BeanUtils {
     public static class BasicPropertyDescriptor extends PropertyDescriptor {
 
         private final Field field;
-
-        @Nullable
-        private Method readMethod;
-
-        @Nullable
-        private Method writeMethod;
-
-        @Nullable
-        private final RecordComponent recordComponent;
+        private @Nullable Method readMethod;
+        private @Nullable Method writeMethod;
+        private final @Nullable RecordComponent recordComponent;
 
         public BasicPropertyDescriptor(
                 Field field,

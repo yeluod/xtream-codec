@@ -25,11 +25,16 @@ import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.utils.XtreamFieldUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * @author hylexus
+ * @author opencode (AI)
+ */
 // todo: TypeParameterUnusedInFormals
 @SuppressWarnings("TypeParameterUnusedInFormals")
 public class EntityDecoder {
@@ -82,39 +87,9 @@ public class EntityDecoder {
     public <T> T decode(int version, ByteBuf source, BeanMetadata beanMetadata, Object containerInstance) {
         final FieldCodec.DeserializeContext context = new DefaultDeserializeContext(this.bufferFactory, this, containerInstance, version, this.beanMetadataRegistry, null);
         if (beanMetadata.getRawType().isRecord()) {
-            @SuppressWarnings("unchecked") final Map<String, Object> instanceProperties = (Map<String, Object>) containerInstance;
-            final Object[] filedValues = new Object[beanMetadata.getPropertyMetadataList().size()];
-            final List<BeanPropertyMetadata> propertyMetadataList = beanMetadata.getPropertyMetadataList();
-            for (int i = 0; i < propertyMetadataList.size(); i++) {
-                final BeanPropertyMetadata propertyMetadata = propertyMetadataList.get(i);
-                if (propertyMetadata.conditionEvaluator().evaluate(context)) {
-                    final Object fieldValue = propertyMetadata.decodePropertyValue(context, source);
-                    filedValues[i] = fieldValue;
-                } else {
-                    final XtreamField fieldAnnotation = propertyMetadata.xtreamFieldAnnotation();
-                    if (fieldAnnotation instanceof XtreamFieldUtils.XtreamTransientFieldProxy proxy) {
-                        final Object defaultValue = proxy.defaultValueForNulls();
-                        filedValues[i] = defaultValue;
-                    } else {
-                        filedValues[i] = XtreamFieldUtils.createDefaultValueForNulls(fieldAnnotation.nulls(), propertyMetadata.rawClass());
-                    }
-                }
-                instanceProperties.put(propertyMetadata.name(), filedValues[i]);
-                context.evaluationContext().setVariable(propertyMetadata.name(), filedValues[i]);
-            }
-            return beanMetadata.createNewRecordInstance(filedValues);
+            return decodeRecord(source, beanMetadata, containerInstance, context, null);
         } else {
-            for (final BeanPropertyMetadata propertyMetadata : beanMetadata.getPropertyMetadataList()) {
-                if (propertyMetadata.conditionEvaluator().evaluate(context)) {
-                    final Object fieldValue = propertyMetadata.decodePropertyValue(context, source);
-                    propertyMetadata.setProperty(containerInstance, fieldValue);
-                    context.evaluationContext().setVariable(propertyMetadata.name(), fieldValue);
-                } else {
-                    context.evaluationContext().setVariable(propertyMetadata.name(), null);
-                }
-            }
-            @SuppressWarnings("unchecked") final T casted = (T) containerInstance;
-            return casted;
+            return decodePojo(source, beanMetadata, containerInstance, context, null);
         }
     }
 
@@ -164,45 +139,93 @@ public class EntityDecoder {
             tracker.getRootSpan().setEntityClass(beanMetadata.getRawType().getName());
         }
         final FieldCodec.DeserializeContext context = new DefaultDeserializeContext(this.bufferFactory, this, containerInstance, version, this.beanMetadataRegistry, tracker);
+        final T result;
         if (beanMetadata.getRawType().isRecord()) {
-            @SuppressWarnings("unchecked") final Map<String, Object> instanceProperties = (Map<String, Object>) containerInstance;
-            final Object[] filedValues = new Object[beanMetadata.getPropertyMetadataList().size()];
-            final List<BeanPropertyMetadata> propertyMetadataList = beanMetadata.getPropertyMetadataList();
-            for (int i = 0; i < propertyMetadataList.size(); i++) {
-                final BeanPropertyMetadata propertyMetadata = propertyMetadataList.get(i);
-                if (propertyMetadata.conditionEvaluator().evaluate(context)) {
-                    final Object fieldValue = propertyMetadata.decodePropertyValueWithTracker(context, source);
-                    filedValues[i] = fieldValue;
-                } else {
-                    final XtreamField fieldAnnotation = propertyMetadata.xtreamFieldAnnotation();
-                    if (fieldAnnotation instanceof XtreamFieldUtils.XtreamTransientFieldProxy proxy) {
-                        final Object defaultValue = proxy.defaultValueForNulls();
-                        filedValues[i] = defaultValue;
-                    } else {
-                        filedValues[i] = XtreamFieldUtils.createDefaultValueForNulls(fieldAnnotation.nulls(), propertyMetadata.rawClass());
-                    }
-                }
-                instanceProperties.put(propertyMetadata.name(), filedValues[i]);
-                context.evaluationContext().setVariable(propertyMetadata.name(), filedValues[i]);
-            }
-            tracker.getRootSpan().setHexString(FormatUtils.toHexString(source, indexBeforeRead, source.readerIndex() - indexBeforeRead));
-            return beanMetadata.createNewRecordInstance(filedValues);
+            result = decodeRecord(source, beanMetadata, containerInstance, context, tracker);
         } else {
-            for (final BeanPropertyMetadata propertyMetadata : beanMetadata.getPropertyMetadataList()) {
-                if (propertyMetadata.conditionEvaluator().evaluate(context)) {
-                    final Object fieldValue = propertyMetadata.decodePropertyValueWithTracker(context, source);
-                    propertyMetadata.setProperty(containerInstance, fieldValue);
-                    context.evaluationContext().setVariable(propertyMetadata.name(), fieldValue);
-                } else {
-                    context.evaluationContext().setVariable(propertyMetadata.name(), null);
-                }
-            }
-            tracker.getRootSpan().setHexString(FormatUtils.toHexString(source, indexBeforeRead, source.readerIndex() - indexBeforeRead));
-            @SuppressWarnings("unchecked") final T instance1 = (T) containerInstance;
-            return instance1;
+            result = decodePojo(source, beanMetadata, containerInstance, context, tracker);
         }
+        tracker.getRootSpan().setHexString(FormatUtils.toHexString(source, indexBeforeRead, source.readerIndex() - indexBeforeRead));
+        return result;
     }
     // endregion withTracker
+
+    // ========== 解码主逻辑（内联派生字段求值）==========
+
+    @SuppressWarnings("unchecked")
+    private <T> T decodeRecord(ByteBuf source, BeanMetadata beanMetadata, Object containerInstance,
+                               FieldCodec.DeserializeContext context, @Nullable CodecTracker tracker) {
+
+        @SuppressWarnings("unchecked") final Map<String, @Nullable Object> instanceProperties = (Map<String, Object>) containerInstance;
+        final List<BeanPropertyMetadata> propertyMetadataList = beanMetadata.getPropertyMetadataList();
+        final @Nullable Object[] filedValues = new Object[propertyMetadataList.size()];
+        final boolean useTracker = tracker != null;
+
+        for (int i = 0; i < propertyMetadataList.size(); i++) {
+            final BeanPropertyMetadata propertyMetadata = propertyMetadataList.get(i);
+            if (propertyMetadata.isDerived()) {
+                continue;
+            }
+            final Object fieldValue;
+            if (propertyMetadata.conditionEvaluator().evaluate(context)) {
+                fieldValue = useTracker
+                        ? propertyMetadata.decodePropertyValueWithTracker(context, source)
+                        : propertyMetadata.decodePropertyValue(context, source);
+            } else {
+                final XtreamField fieldAnnotation = propertyMetadata.xtreamFieldAnnotation();
+                if (fieldAnnotation instanceof XtreamFieldUtils.XtreamTransientFieldProxy proxy) {
+                    fieldValue = proxy.defaultValueForNulls();
+                } else {
+                    fieldValue = XtreamFieldUtils.createDefaultValueForNulls(fieldAnnotation.nulls(), propertyMetadata.rawClass());
+                }
+            }
+            filedValues[i] = fieldValue;
+            instanceProperties.put(propertyMetadata.name(), fieldValue);
+            context.evaluationContext().setVariable(propertyMetadata.name(), fieldValue);
+
+            // 内联求值：源字段解码后立即计算依赖它的派生字段值
+            if (beanMetadata.hasDerivedFields()) {
+                XtreamFieldUtils.applyDerivedFieldsInline(fieldValue, propertyMetadata.name(), beanMetadata, (derived, derivedVal) -> {
+                    final int idx = beanMetadata.propertyIndex(derived.name());
+                    filedValues[idx] = derivedVal;
+                    instanceProperties.put(derived.name(), derivedVal);
+                    context.evaluationContext().setVariable(derived.name(), derivedVal);
+                });
+            }
+        }
+        return beanMetadata.createNewRecordInstance(filedValues);
+    }
+
+    private <T> T decodePojo(ByteBuf source, BeanMetadata beanMetadata, Object containerInstance,
+                             FieldCodec.DeserializeContext context, @Nullable CodecTracker tracker) {
+        final List<BeanPropertyMetadata> propertyMetadataList = beanMetadata.getPropertyMetadataList();
+        final boolean useTracker = tracker != null;
+
+        for (final BeanPropertyMetadata propertyMetadata : propertyMetadataList) {
+            if (propertyMetadata.isDerived()) {
+                continue;
+            }
+            if (propertyMetadata.conditionEvaluator().evaluate(context)) {
+                final Object fieldValue = useTracker
+                        ? propertyMetadata.decodePropertyValueWithTracker(context, source)
+                        : propertyMetadata.decodePropertyValue(context, source);
+                propertyMetadata.setProperty(containerInstance, fieldValue);
+                context.evaluationContext().setVariable(propertyMetadata.name(), fieldValue);
+
+                // 内联求值：源字段解码后立即计算依赖它的派生字段值
+                if (beanMetadata.hasDerivedFields()) {
+                    XtreamFieldUtils.applyDerivedFieldsInline(fieldValue, propertyMetadata.name(), beanMetadata, (derived, derivedVal) -> {
+                        derived.setProperty(containerInstance, derivedVal);
+                        context.evaluationContext().setVariable(derived.name(), derivedVal);
+                    });
+                }
+            } else {
+                context.evaluationContext().setVariable(propertyMetadata.name(), null);
+            }
+        }
+        @SuppressWarnings("unchecked") final T typed = (T) containerInstance;
+        return typed;
+    }
 
     @SuppressWarnings("redundent")
     public BeanMetadataRegistry getBeanMetadataRegistry() {
