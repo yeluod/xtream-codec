@@ -24,27 +24,27 @@ tag:
 
 @tab:active Rust 命名风格#rust-style
 
-@[code](@src/core/entity-codec/demo01/RustStyleDebugEntity01Flatten.java)
+@[code{28-}](@core-debug/io/github/hylexus/xtream/debug/codec/core/demo01/RustStyleDebugEntity01Flatten.java)
 
 @tab:active Rust 命名风格(简化)#rust-style-simple
 
-@[code java{30,35}](@src/core/entity-codec/demo01/RustStyleDebugEntity01FlattenSimple.java)
+@[code{28-} java{30,35}](@core-debug/io/github/hylexus/xtream/debug/codec/core/demo01/RustStyleDebugEntity01FlattenSimple.java)
 
 @tab 原始命名风格#raw-style
 
-@[code](@src/core/entity-codec/demo01/RawStyleDebugEntity01Flatten.java)
+@[code{29-}](@core-debug/io/github/hylexus/xtream/debug/codec/core/demo01/RawStyleDebugEntity01Flatten.java)
 
 @tab 原始命名风格(简化)#raw-style-simple
 
-@[code java{31,36}](@src/core/entity-codec/demo01/RawStyleDebugEntity01FlattenSimple.java)
+@[code{29-} java{32,37}](@core-debug/io/github/hylexus/xtream/debug/codec/core/demo01/RawStyleDebugEntity01FlattenSimple.java)
 
 @tab JT/T 808 命名风格#jt-style
 
-@[code](@src/core/entity-codec/demo01/JtStyleDebugEntity01Flatten.java)
+@[code{28-}](@core-debug/io/github/hylexus/xtream/debug/codec/core/demo01/JtStyleDebugEntity01Flatten.java)
 
 @tab JT/T 808 命名风格(简化)#jt-style-simple
 
-@[code java{31,36}](@src/core/entity-codec/demo01/JtStyleDebugEntity01FlattenSimple.java)
+@[code{28-} java{31,36}](@core-debug/io/github/hylexus/xtream/debug/codec/core/demo01/JtStyleDebugEntity01FlattenSimple.java)
 
 :::
 

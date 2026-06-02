@@ -16,6 +16,7 @@
 
 package io.github.hylexus.xtream.debug.codec.core.demo01;
 
+import io.github.hylexus.xtream.codec.base.annotation.ReferencedByDocs;
 import io.github.hylexus.xtream.codec.common.utils.XtreamConstants;
 import io.github.hylexus.xtream.codec.core.annotation.NumberSignedness;
 import io.github.hylexus.xtream.codec.core.annotation.PrependLengthFieldType;
@@ -24,13 +25,14 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
 
+@ReferencedByDocs("docs/src/guide/core/samples/custom-protocol-sample-01/flatten-style-demo.md")
 @Setter
 @Getter
 @ToString
 // 这里使用了 prependLengthFieldType 和 prependLengthFieldLength 属性
 // 从而省略了 usernameLength 和 passwordLength
 public class RawStyleDebugEntity01FlattenSimple {
-    /// ///////////////////// header
+    // region header
     // 固定为 0x80901234
     @XtreamField(length = 4, signedness = NumberSignedness.SIGNED)
     private int magicNumber = 0x80901234;
@@ -50,8 +52,9 @@ public class RawStyleDebugEntity01FlattenSimple {
     // 消息体长度 无符号数 2字节
     @XtreamField(length = 2, signedness = NumberSignedness.UNSIGNED)
     private int msgBodyLength;
+    // endregion
 
-    /// ///////////////////// body
+    // region body
     // 用户名 String, "UTF-8"
     // prependLengthFieldType: 前面自动添加一个u16类型字段作为该字段的长度字段
     @XtreamField(charset = "utf-8", prependLengthFieldType = PrependLengthFieldType.u16)
@@ -77,4 +80,5 @@ public class RawStyleDebugEntity01FlattenSimple {
     // 状态 有符号数 2字节
     @XtreamField(length = 2, signedness = NumberSignedness.SIGNED)
     private short status;
+    // endregion
 }

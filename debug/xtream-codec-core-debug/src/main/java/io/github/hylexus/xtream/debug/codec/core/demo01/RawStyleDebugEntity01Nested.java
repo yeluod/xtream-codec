@@ -16,6 +16,7 @@
 
 package io.github.hylexus.xtream.debug.codec.core.demo01;
 
+import io.github.hylexus.xtream.codec.base.annotation.ReferencedByDocs;
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
 import io.github.hylexus.xtream.codec.common.utils.XtreamConstants;
 import io.github.hylexus.xtream.codec.core.annotation.Expression;
@@ -27,6 +28,7 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
 
+@ReferencedByDocs("docs/src/guide/core/samples/custom-protocol-sample-01/nested-style-demo.md")
 @Setter
 @Getter
 @ToString
@@ -73,7 +75,7 @@ public class RawStyleDebugEntity01Nested {
 
         // 用户名 String, "UTF-8"
         // @XtreamField(charset = "utf-8", lengthExpression = "getUsernameLength()")
-        @XtreamField(charset = "utf-8", lengthExpressions = @Expression(spel = "getUsernameLength()",mvel = "self.getUsernameLength()",aviator = "self.usernameLength"))
+        @XtreamField(charset = "utf-8", lengthExpressions = @Expression(spel = "getUsernameLength()", mvel = "self.getUsernameLength()", aviator = "self.usernameLength"))
         private String username;
 
         // 下一个字段长度 无符号数 2字节
@@ -82,7 +84,7 @@ public class RawStyleDebugEntity01Nested {
 
         // 密码 String, "GBK"
         // @Preset.RustStyle.str(charset = XtreamConstants.CHARSET_NAME_GBK, lengthExpression = "getPasswordLength()")
-        @Preset.RustStyle.str(charset = XtreamConstants.CHARSET_NAME_GBK, lengthExpressions = @Expression(spel = "getPasswordLength()",mvel = "self.getPasswordLength()",aviator = "self.passwordLength"))
+        @Preset.RustStyle.str(charset = XtreamConstants.CHARSET_NAME_GBK, lengthExpressions = @Expression(spel = "getPasswordLength()", mvel = "self.getPasswordLength()", aviator = "self.passwordLength"))
         private String password;
 
         // 生日 String[8], "yyyyMMdd", "UTF-8"

@@ -16,6 +16,7 @@
 
 package io.github.hylexus.xtream.codec.core;
 
+import io.github.hylexus.xtream.codec.base.annotation.ReferencedByDocs;
 import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.common.utils.XtreamBytes;
 import io.github.hylexus.xtream.codec.core.annotation.PrependLengthFieldType;
@@ -31,7 +32,30 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@ReferencedByDocs
 class EntityCodecWithTrackerTest {
+
+    @Getter
+    @Setter
+    @ToString
+    @Accessors(chain = true)
+    public static class UserEntity {
+
+        @Preset.RustStyle.u32(desc = "用户ID(32位无符号数)")
+        private Long id;
+
+        // prependLengthFieldType: 前置一个 u8 类型的字段表示当前字段的长度
+        @Preset.RustStyle.str(prependLengthFieldType = PrependLengthFieldType.u8, desc = "用户名")
+        private String name;
+
+        @Preset.RustStyle.u16(desc = "年龄(16位无符号数)")
+        private Integer age;
+
+        // prependLengthFieldType: 前置一个 u8 类型的字段表示当前字段的长度
+        @Preset.RustStyle.str(prependLengthFieldType = PrependLengthFieldType.u8, desc = "地址")
+        private String address;
+
+    }
 
     EntityCodec entityCodec = EntityCodec.DEFAULT;
 
@@ -76,25 +100,4 @@ class EntityCodecWithTrackerTest {
         }
     }
 
-    @Getter
-    @Setter
-    @ToString
-    @Accessors(chain = true)
-    public static class UserEntity {
-
-        @Preset.RustStyle.u32(desc = "用户ID(32位无符号数)")
-        private Long id;
-
-        // prependLengthFieldType: 前置一个 u8 类型的字段表示当前字段的长度
-        @Preset.RustStyle.str(prependLengthFieldType = PrependLengthFieldType.u8, desc = "用户名")
-        private String name;
-
-        @Preset.RustStyle.u16(desc = "年龄(16位无符号数)")
-        private Integer age;
-
-        // prependLengthFieldType: 前置一个 u8 类型的字段表示当前字段的长度
-        @Preset.RustStyle.str(prependLengthFieldType = PrependLengthFieldType.u8, desc = "地址")
-        private String address;
-
-    }
 }

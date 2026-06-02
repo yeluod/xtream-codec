@@ -17,6 +17,7 @@
 package io.github.hylexus.xtream.codec.core;
 
 import io.github.hylexus.xtream.codec.BaseEntityCodecTest;
+import io.github.hylexus.xtream.codec.base.annotation.ReferencedByDocs;
 import io.github.hylexus.xtream.codec.common.utils.XtreamConstants;
 import io.github.hylexus.xtream.codec.core.annotation.PrependLengthFieldType;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
@@ -31,7 +32,31 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@ReferencedByDocs("docs/src/guide/core/annotation-driven/entity-codec.md")
 class EntityCodecTest extends BaseEntityCodecTest {
+
+    @Getter
+    @Setter
+    @ToString
+    @Accessors(chain = true)
+    public static class UserEntity {
+
+        @Preset.RustStyle.u32(desc = "用户ID(32位无符号数1)")
+        private Long id;
+
+        // prependLengthFieldType: 前置一个 u8 类型的字段表示当前字段的长度
+        @Preset.RustStyle.str(prependLengthFieldType = PrependLengthFieldType.u8, desc = "用户名(UTF-8)")
+        @Preset.RustStyle.str(prependLengthFieldType = PrependLengthFieldType.u8, desc = "用户名(GBK)", version = {1, 2}, charset = XtreamConstants.CHARSET_NAME_GBK)
+        private String name;
+
+        @Preset.RustStyle.u16(desc = "年龄(16位无符号数)")
+        private Integer age;
+
+        // prependLengthFieldType: 前置一个 u8 类型的字段表示当前字段的长度
+        @Preset.RustStyle.str(prependLengthFieldType = PrependLengthFieldType.u8, desc = "地址")
+        private String address;
+
+    }
 
     UserEntity userEntity;
 
@@ -95,26 +120,4 @@ class EntityCodecTest extends BaseEntityCodecTest {
         assertEquals(expected.getAddress(), actual.getAddress());
     }
 
-    @Getter
-    @Setter
-    @ToString
-    @Accessors(chain = true)
-    public static class UserEntity {
-
-        @Preset.RustStyle.u32(desc = "用户ID(32位无符号数1)")
-        private Long id;
-
-        // prependLengthFieldType: 前置一个 u8 类型的字段表示当前字段的长度
-        @Preset.RustStyle.str(prependLengthFieldType = PrependLengthFieldType.u8, desc = "用户名(UTF-8)")
-        @Preset.RustStyle.str(prependLengthFieldType = PrependLengthFieldType.u8, desc = "用户名(GBK)", version = {1, 2}, charset = XtreamConstants.CHARSET_NAME_GBK)
-        private String name;
-
-        @Preset.RustStyle.u16(desc = "年龄(16位无符号数)")
-        private Integer age;
-
-        // prependLengthFieldType: 前置一个 u8 类型的字段表示当前字段的长度
-        @Preset.RustStyle.str(prependLengthFieldType = PrependLengthFieldType.u8, desc = "地址")
-        private String address;
-
-    }
 }

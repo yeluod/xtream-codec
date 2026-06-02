@@ -16,6 +16,7 @@
 
 package io.github.hylexus.xtream.debug.codec.core.demo01;
 
+import io.github.hylexus.xtream.codec.base.annotation.ReferencedByDocs;
 import io.github.hylexus.xtream.codec.common.utils.XtreamConstants;
 import io.github.hylexus.xtream.codec.core.annotation.Expression;
 import io.github.hylexus.xtream.codec.core.type.Preset;
@@ -23,11 +24,12 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
 
+@ReferencedByDocs("docs/src/guide/core/samples/custom-protocol-sample-01/flatten-style-demo.md")
 @Setter
 @Getter
 @ToString
 public class JtStyleDebugEntity01Flatten {
-    /// ///////////////////// header
+    // region header
     // 固定为 0x80901234
     @Preset.JtStyle.Dword
     private long magicNumber = 0x80901234L;
@@ -47,15 +49,16 @@ public class JtStyleDebugEntity01Flatten {
     // 消息体长度 无符号数 2字节
     @Preset.JtStyle.Word
     private int msgBodyLength;
+    // endregion
 
-    /// ///////////////////// body
+    // region body
     // 下一个字段长度 无符号数 2字节
     @Preset.JtStyle.Word
     private int usernameLength;
 
     // 用户名 String, "UTF-8"
     // @Preset.JtStyle.Str(charset = "UTF-8", lengthExpression = "getUsernameLength()")
-    @Preset.JtStyle.Str(charset = "UTF-8", lengthExpressions = @Expression(spel = "getUsernameLength()",mvel = "self.getUsernameLength()",aviator = "self.usernameLength"))
+    @Preset.JtStyle.Str(charset = "UTF-8", lengthExpressions = @Expression(spel = "getUsernameLength()", mvel = "self.getUsernameLength()", aviator = "self.usernameLength"))
     private String username;
 
     // 下一个字段长度 无符号数 2字节
@@ -64,7 +67,7 @@ public class JtStyleDebugEntity01Flatten {
 
     // 密码 String, "GBK"
     // @Preset.JtStyle.Str(charset = XtreamConstants.CHARSET_NAME_GBK, lengthExpression = "getPasswordLength()")
-    @Preset.JtStyle.Str(charset = XtreamConstants.CHARSET_NAME_GBK, lengthExpressions = @Expression(spel = "getPasswordLength()",mvel = "self.getPasswordLength()",aviator = "self.passwordLength"))
+    @Preset.JtStyle.Str(charset = XtreamConstants.CHARSET_NAME_GBK, lengthExpressions = @Expression(spel = "getPasswordLength()", mvel = "self.getPasswordLength()", aviator = "self.passwordLength"))
     private String password;
 
     // 生日 String[8], "yyyyMMdd", "UTF-8"
@@ -82,4 +85,5 @@ public class JtStyleDebugEntity01Flatten {
     // 状态 无符号数 2字节
     @Preset.JtStyle.Word
     private int status;
+    // endregion
 }

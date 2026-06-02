@@ -16,6 +16,7 @@
 
 package io.github.hylexus.xtream.debug.codec.core.demo02;
 
+import io.github.hylexus.xtream.codec.base.annotation.ReferencedByDocs;
 import io.github.hylexus.xtream.codec.core.annotation.Expression;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamEntityCreator;
 import io.github.hylexus.xtream.codec.core.type.Preset;
@@ -25,6 +26,7 @@ import lombok.ToString;
 
 import java.util.List;
 
+@ReferencedByDocs("docs/src/guide/core/samples/custom-protocol-sample-02/flatten-style-demo.md")
 @Setter
 @Getter
 @ToString

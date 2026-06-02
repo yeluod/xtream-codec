@@ -26,5 +26,5 @@ icon: arrows-spin
 
 下面以 `@Preset.RustStyle.xxx()` 风格的注解为例，介绍如何使用 `EntityCodec`:
 
-@[code](@src/core/entity-codec/demo00/EntityCodecTest.java)
+@[code{36-}](@core-test/io/github/hylexus/xtream/codec/core/EntityCodecTest.java)
 

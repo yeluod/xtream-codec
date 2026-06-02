@@ -19,7 +19,7 @@ icon: arrows-spin
 
 ## 示例
 
-@[code](@src/core/entity-codec/demo00/EntityCodecWithTrackerTest.java)
+@[code{36-}](@core-test/io/github/hylexus/xtream/codec/core/EntityCodecWithTrackerTest.java)
 
 ## 输出效果
 

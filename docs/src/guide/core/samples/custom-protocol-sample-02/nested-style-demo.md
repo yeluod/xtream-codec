@@ -24,15 +24,15 @@ tag:
 
 @tab:active Rust 命名风格#rust-style
 
-@[code](@src/core/entity-codec/demo02/RustStyleDebugEntity02Nested.java)
+@[code{30-}](@core-debug/io/github/hylexus/xtream/debug/codec/core/demo02/RustStyleDebugEntity02Nested.java)
 
 @tab 原始命名风格#raw-style
 
-@[code](@src/core/entity-codec/demo02/RawStyleDebugEntity02Nested.java)
+@[code{32-}](@core-debug/io/github/hylexus/xtream/debug/codec/core/demo02/RawStyleDebugEntity02Nested.java)
 
 @tab JT/T 808 命名风格#jt-style
 
-@[code](@src/core/entity-codec/demo02/JtStyleDebugEntity02Nested.java)
+@[code{29-}](@core-debug/io/github/hylexus/xtream/debug/codec/core/demo02/JtStyleDebugEntity02Nested.java)
 
 :::
 

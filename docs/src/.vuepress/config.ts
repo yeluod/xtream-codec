@@ -20,11 +20,24 @@ export default defineUserConfig({
     // shouldPrefetch: false,
     markdown: {
         importCode: {
-            handleImportPath: (str) =>
-                str.replace(
+            handleImportPath: (str) => {
+                if (str.startsWith('@project')) {
+                    return str.replace(/^@project/, path.resolve(__dirname, '../../../'));
+                }
+                if (str.startsWith('@core-test')) {
+                    return str.replace(/^@core-test/, path.resolve(__dirname, '../../../xtream-codec-core/src/test/java'));
+                }
+                if (str.startsWith('@core-debug-test')) {
+                    return str.replace(/^@core-debug-test/, path.resolve(__dirname, '../../../debug/xtream-codec-core-debug/src/test/java'));
+                }
+                if (str.startsWith('@core-debug')) {
+                    return str.replace(/^@core-debug/, path.resolve(__dirname, '../../../debug/xtream-codec-core-debug/src/main/java'));
+                }
+                return str.replace(
                     /^@src/,
                     path.resolve(__dirname, '../code-snippet/')
-                ),
+                );
+            },
         },
     },
 

@@ -16,6 +16,7 @@
 
 package io.github.hylexus.xtream.debug.codec.core.demo01;
 
+import io.github.hylexus.xtream.codec.base.annotation.ReferencedByDocs;
 import io.github.hylexus.xtream.codec.common.utils.XtreamConstants;
 import io.github.hylexus.xtream.codec.core.annotation.Expression;
 import io.github.hylexus.xtream.codec.core.type.Preset;
@@ -24,6 +25,7 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
 
+@ReferencedByDocs("docs/src/guide/core/samples/custom-protocol-sample-01/nested-style-demo.md")
 @Setter
 @Getter
 @ToString
