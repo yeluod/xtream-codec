@@ -470,6 +470,73 @@ configure(subprojects) {
 }
 // endregion Maven
 
+// region updateVersion
+/**
+ * 以 gradle.properties 中的 projectVersion 为单一来源，同步以下文件：
+ *   1. package.json 的 "version" 字段
+ *   2. docs/src 中 Maven/Gradle 依赖版本号（仅含 io.github.hylexus.xtream 坐标的）
+ * 跳过 release-notes/ 目录（历史版本标题保留不动）。
+ */
+val semverRegex = Regex("""\d+\.\d+\.\d+(-[a-zA-Z]\w*(\.\w+)*)?""")
+
+tasks.register("updateVersion") {
+    group = "release"
+    description = "同步 projectVersion 到 package.json 和文档中的依赖版本号（不含 release-notes）"
+
+    doLast {
+        val newVersion = xtreamConfig.projectVersion.trim()
+        println("=== updateVersion: $newVersion ===")
+
+        // 1. package.json —— 更新 "version" 字段
+        fileTree(projectDir) {
+            include("**/package.json")
+            exclude("**/node_modules/**")
+        }.forEach { pkg ->
+            val text = pkg.readText()
+            val updated = text.replace(
+                Regex(""""version":\s*"\d+\.\d+\.\d+(-[a-zA-Z]\w*(\.\w+)*)?""" + "\""),
+                "\"version\": \"$newVersion\""
+            )
+            if (updated != text) {
+                pkg.writeText(updated)
+                println("  [package.json] ${relativePath(pkg)}")
+            }
+        }
+
+        // 2. docs 中的版本号 —— 仅替换项目自身 Maven/Gradle 依赖版本
+        fileTree("$projectDir/docs/src") {
+            include("**/*.md")
+            exclude("**/release-notes/**", "**/node_modules/**")
+        }.forEach { doc ->
+            val text = doc.readText()
+            var changed = false
+
+            // Maven: <version>X.Y.Z</version> 仅当前面有项目 groupId 时替换
+            val afterMaven = text.replace(
+                Regex(
+                    """(io\.github\.hylexus\.xtream[\w-]*[\s\S]{0,300}?<version>)$semverRegex(</version>)""",
+                    setOf(RegexOption.DOT_MATCHES_ALL)
+                )
+            ) { "${it.groupValues[1]}$newVersion${it.groupValues[4]}" }
+            if (afterMaven != text) changed = true
+
+            // Gradle: io.github.hylexus.xtream:artifactId:X.Y.Z
+            val afterGradle = afterMaven.replace(
+                Regex("(io\\.github\\.hylexus\\.xtream:[\\w-]+:)$semverRegex")
+            ) { "${it.groupValues[1]}$newVersion" }
+            if (afterGradle != afterMaven) changed = true
+
+            if (changed) {
+                doc.writeText(afterGradle)
+                println("  [docs       ] ${relativePath(doc)}")
+            }
+        }
+
+        println("=== updateVersion done ===")
+    }
+}
+// endregion updateVersion
+
 fun isJavaProject(project: Project): Boolean {
     return project != rootProject
             && (

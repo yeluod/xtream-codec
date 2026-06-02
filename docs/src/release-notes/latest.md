@@ -5,6 +5,22 @@ article: false
 
 # Latest
 
+## 0.6.0(2026-06-02)
+
+### 📔 Documentation
+
+- 新增文档 [@DerivedField](https://iotplanet.top/xtream-codec/guide/core/annotation-driven/derived-field.html)
+- 新增文档 [多版本支持](https://iotplanet.top/xtream-codec/guide/core/annotation-driven/multi-version.html)
+
+### ⭐ New Features
+
+- 新增 [@DerivedField](https://iotplanet.top/xtream-codec/guide/core/annotation-driven/derived-field.html) 注解
+
+### ❤️ Contributors
+
+- [opencode AI](https://github.com/anomalyco/opencode)
+- [@hylexus](https://github.com/hylexus)
+
 ## 0.5.0(2026-05-30)
 
 ### 📔 Documentation
