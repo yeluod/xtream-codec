@@ -33,6 +33,9 @@ import org.jspecify.annotations.Nullable;
 import java.util.Collection;
 import java.util.Objects;
 
+/**
+ * @author Codex (AI)
+ */
 public class SequenceBeanPropertyMetadata extends BasicBeanPropertyMetadata {
     // todo nestedBeanPropertyMetadata 配置
     private final NestedBeanPropertyMetadata nestedBeanPropertyMetadata;
@@ -159,4 +162,10 @@ public class SequenceBeanPropertyMetadata extends BasicBeanPropertyMetadata {
         codecTracker.finishCurrentSpan();
         return list;
     }
+
+    @Override
+    public final boolean isEncodedLength() {
+        return false;
+    }
+
 }

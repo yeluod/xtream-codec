@@ -33,6 +33,7 @@ import java.util.Optional;
 /**
  * @author hylexus
  * @author opencode (AI)
+ * @author Codex (AI)
  */
 public interface BeanPropertyMetadata {
 
@@ -164,6 +165,15 @@ public interface BeanPropertyMetadata {
      */
     default @Nullable FieldTransformer<?, ?> derivedTransformer() {
         return null;
+    }
+
+    /**
+     * @return {@code true} if this property is an encoded-length field
+     * @author opencode (AI)
+     * @since 0.7.0
+     */
+    default boolean isEncodedLength() {
+        return false;
     }
 
     BeanMetadataRegistry beanMetadataRegistry();

@@ -18,6 +18,7 @@ package io.github.hylexus.xtream.codec.core;
 
 import io.github.hylexus.xtream.codec.common.bean.BeanMetadata;
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
+import io.github.hylexus.xtream.codec.common.bean.EncodedLengthPlan;
 import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
 import io.github.hylexus.xtream.codec.core.impl.DefaultSerializeContext;
@@ -28,9 +29,13 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import org.jspecify.annotations.Nullable;
 
+import java.util.List;
+import java.util.Objects;
+
 /**
  * @author hylexus
  * @author opencode (AI)
+ * @author Codex (AI)
  */
 public class EntityEncoder {
     protected final ByteBufAllocator bufferFactory = ByteBufAllocator.DEFAULT;
@@ -87,28 +92,11 @@ public class EntityEncoder {
             return;
         }
         final FieldCodec.SerializeContext context = new DefaultSerializeContext(this.bufferFactory, this, instance, version, this.beanMetadataRegistry, null);
-        encodeFields(beanMetadata, instance, target, context);
-    }
-
-    private void encodeFields(BeanMetadata beanMetadata, Object instance, ByteBuf target, FieldCodec.SerializeContext context) {
-        for (final BeanPropertyMetadata propertyMetadata : beanMetadata.getPropertyMetadataList()) {
-            if (propertyMetadata.isDerived()) {
-                continue;
-            }
-            if (propertyMetadata.xtreamFieldAnnotation().codecStrategy() == XtreamField.CodecStrategy.TRANSIENT) {
-                continue;
-            }
-            // 内联 reverseSource：从派生字段取值 + 逆变换，替代源字段的原始值
-            final Object value = resolveEncodingValue(propertyMetadata, instance, beanMetadata);
-            context.evaluationContext().setVariable(propertyMetadata.name(), value);
-
-            if (value == null) {
-                continue;
-            }
-
-            if (propertyMetadata.conditionEvaluator().evaluate(context)) {
-                propertyMetadata.encodePropertyValue(context, target, value);
-            }
+        final List<BeanPropertyMetadata> props = beanMetadata.getPropertyMetadataList();
+        if (beanMetadata.hasEncodedLengthField()) {
+            encodeFieldsWithEncodedLength(props, beanMetadata, instance, target, context, NORMAL, Objects.requireNonNull(beanMetadata.getEncodedLengthPlan()));
+        } else {
+            encodeFieldsNorm(props, beanMetadata, instance, target, context, NORMAL);
         }
     }
 
@@ -158,23 +146,11 @@ public class EntityEncoder {
         if (tracker.getRootSpan().getEntityClass() == null) {
             tracker.getRootSpan().setEntityClass(beanMetadata.getRawType().getName());
         }
-        for (final BeanPropertyMetadata propertyMetadata : beanMetadata.getPropertyMetadataList()) {
-            if (propertyMetadata.isDerived()) {
-                continue;
-            }
-            if (propertyMetadata.xtreamFieldAnnotation().codecStrategy() == XtreamField.CodecStrategy.TRANSIENT) {
-                continue;
-            }
-            final Object value = resolveEncodingValue(propertyMetadata, instance, beanMetadata);
-            context.evaluationContext().setVariable(propertyMetadata.name(), value);
-
-            if (value == null) {
-                continue;
-            }
-
-            if (propertyMetadata.conditionEvaluator().evaluate(context)) {
-                propertyMetadata.encodePropertyValueWithTracker(context, target, value);
-            }
+        final List<BeanPropertyMetadata> props = beanMetadata.getPropertyMetadataList();
+        if (beanMetadata.hasEncodedLengthField()) {
+            encodeFieldsWithEncodedLength(props, beanMetadata, instance, target, context, TRACKED, Objects.requireNonNull(beanMetadata.getEncodedLengthPlan()));
+        } else {
+            encodeFieldsNorm(props, beanMetadata, instance, target, context, TRACKED);
         }
         tracker.getRootSpan().setHexString(FormatUtils.toHexString(target, indexBeforeWrite, target.writerIndex() - indexBeforeWrite));
     }
@@ -194,8 +170,140 @@ public class EntityEncoder {
         return this.expressionFactory;
     }
 
+    // region field encoding
+
+    @FunctionalInterface
+    private interface FieldEncoder {
+        void encode(BeanPropertyMetadata pm, FieldCodec.SerializeContext ctx, ByteBuf buf, Object value);
+    }
+
+    private static final FieldEncoder NORMAL = BeanPropertyMetadata::encodePropertyValue;
+    private static final FieldEncoder TRACKED = BeanPropertyMetadata::encodePropertyValueWithTracker;
+
+    private static void encodeFieldsNorm(List<BeanPropertyMetadata> props, BeanMetadata beanMetadata, Object instance, ByteBuf target, FieldCodec.SerializeContext context, FieldEncoder encoder) {
+        for (final BeanPropertyMetadata pm : props) {
+            if (pm.isDerived()) {
+                continue;
+            }
+            if (pm.xtreamFieldAnnotation().codecStrategy() == XtreamField.CodecStrategy.TRANSIENT) {
+                continue;
+            }
+            encodeField(pm, instance, beanMetadata, target, context, encoder);
+        }
+    }
+
+    private static void encodeFieldsWithEncodedLength(List<BeanPropertyMetadata> props, BeanMetadata beanMetadata, Object instance, ByteBuf target, FieldCodec.SerializeContext context, FieldEncoder encoder, EncodedLengthPlan plan) {
+        final EncodedLengthRuntime runtime = new EncodedLengthRuntime(plan);
+        for (int i = 0; i < props.size(); i++) {
+            final BeanPropertyMetadata pm = props.get(i);
+            runtime.beforeField(i, target);
+            if (pm.isDerived()) {
+                continue;
+            }
+            if (pm.xtreamFieldAnnotation().codecStrategy() == XtreamField.CodecStrategy.TRANSIENT) {
+                continue;
+            }
+
+            if (pm.isEncodedLength()) {
+                if (!pm.conditionEvaluator().evaluate(context)) {
+                    continue;
+                }
+                runtime.writePlaceholder(pm, target, context, encoder);
+                continue;
+            }
+
+            encodeField(pm, instance, beanMetadata, target, context, encoder);
+        }
+
+        runtime.finish(target);
+    }
+
+    private static void encodeField(BeanPropertyMetadata pm, Object instance, BeanMetadata beanMetadata, ByteBuf target, FieldCodec.SerializeContext context, FieldEncoder encoder) {
+        final Object value = resolveEncodingValue(pm, instance, beanMetadata);
+        context.evaluationContext().setVariable(pm.name(), value);
+        if (value == null) {
+            return;
+        }
+        if (pm.conditionEvaluator().evaluate(context)) {
+            encoder.encode(pm, context, target, value);
+        }
+    }
+
+    // endregion field encoding
+
     private static @Nullable Object resolveEncodingValue(BeanPropertyMetadata sourceProperty, Object instance, BeanMetadata beanMetadata) {
         return XtreamFieldUtils.resolveEncodingValue(sourceProperty, instance, beanMetadata);
+    }
+
+    /**
+     * {@link EncodedLengthPlan} 的单次编码运行时状态。
+     * <p>
+     * 编码循环在每个字段之前调用 {@link #beforeField(int, ByteBuf)}，在长度字段位置写入占位值，
+     * 在范围结束位置或实体编码结束时完成回填。范围长度通过 {@code writerIndex} 的差值计算，
+     * 因此会自然排除被条件表达式或 {@code null} 值跳过的字段。
+     */
+    private static final class EncodedLengthRuntime {
+        private final EncodedLengthPlan plan;
+        // 长度字段占位值在 ByteBuf 中的起始位置
+        private int placeholderStart = -1;
+        // 被统计范围的起始位置
+        private int rangeStart = -1;
+        // 长度字段是否已经实际写入占位值
+        private boolean placeholderWritten;
+        // 范围长度是否已经完成回填
+        private boolean closed;
+
+        private EncodedLengthRuntime(EncodedLengthPlan plan) {
+            this.plan = plan;
+        }
+
+        /**
+         * 在当前字段编码前更新范围状态。
+         * <p>
+         * {@code until} 是左闭右开范围的结束字段，因此需要在该字段编码前回填。
+         */
+        void beforeField(int fieldIndex, ByteBuf target) {
+            if (!this.placeholderWritten || this.closed) {
+                return;
+            }
+            if (this.rangeStart < 0 && fieldIndex == this.plan.fromFieldIndex()) {
+                this.rangeStart = target.writerIndex();
+            }
+            if (fieldIndex == this.plan.untilFieldIndex() && this.rangeStart >= 0) {
+                this.backfill(target, target.writerIndex());
+            }
+        }
+
+        /**
+         * 写入长度字段的占位值，并记录后续回填所需的位置。
+         */
+        void writePlaceholder(BeanPropertyMetadata pm, ByteBuf target, FieldCodec.SerializeContext context, FieldEncoder encoder) {
+            this.placeholderStart = target.writerIndex();
+            encoder.encode(pm, context, target, 0);
+            context.evaluationContext().setVariable(pm.name(), 0);
+            this.placeholderWritten = true;
+            if (this.plan.fromFieldIndex() < 0) {
+                this.rangeStart = target.writerIndex();
+            }
+        }
+
+        /**
+         * 在没有显式 {@code until} 字段时，使用当前缓冲区尾部结束统计范围。
+         */
+        void finish(ByteBuf target) {
+            if (this.placeholderWritten && !this.closed && this.rangeStart >= 0) {
+                this.backfill(target, target.writerIndex());
+            }
+        }
+
+        /**
+         * 根据范围起止位置计算实际编码长度，并原地覆盖长度字段占位值。
+         */
+        private void backfill(ByteBuf target, int rangeEnd) {
+            final int encodedLength = rangeEnd - this.rangeStart;
+            this.plan.writer().write(target, this.placeholderStart, encodedLength);
+            this.closed = true;
+        }
     }
 
 }

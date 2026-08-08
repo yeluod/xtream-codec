@@ -44,6 +44,7 @@ import static java.util.Objects.requireNonNull;
 
 /**
  * @author hylexus
+ * @author Codex (AI)
  * @see XtreamFieldMapDescriptor
  * @see DelegateBeanMetadataFieldCodec
  * @since 0.0.1
@@ -248,6 +249,11 @@ public class MapBeanPropertyMetadata extends BasicBeanPropertyMetadata {
     @Override
     public ContainerInstanceFactory containerInstanceFactory() {
         return this.containerInstanceFactory;
+    }
+
+    @Override
+    public final boolean isEncodedLength() {
+        return false;
     }
 
     Class<?> getJavaTypeForFieldLengthField(int lengthFieldSize) {

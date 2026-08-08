@@ -32,11 +32,13 @@ import io.github.hylexus.xtream.codec.core.utils.XtreamFieldUtils;
 import io.netty.buffer.ByteBuf;
 import org.jspecify.annotations.Nullable;
 
+import java.util.Map;
 import java.util.Objects;
 
 /**
  * @author hylexus
  * @author opencode (AI)
+ * @author Codex (AI)
  */
 public class NestedBeanPropertyMetadata extends BasicBeanPropertyMetadata {
 
@@ -49,12 +51,8 @@ public class NestedBeanPropertyMetadata extends BasicBeanPropertyMetadata {
         super(beanMetadataRegistry, pm.name(), pm.rawClass(), pm.version(), pm.xtreamFieldAnnotation(), pm.field(), pm.propertyGetter(), pm.propertySetter());
         this.nestedBeanMetadata = nestedBeanMetadata;
         this.delegate = pm;
-        // this.fieldLengthExtractor = fieldLengthExtractor == null
-        //         ? delegate.fieldLengthExtractor()
-        //         : fieldLengthExtractor;
         this.fieldLengthExtractor = fieldLengthExtractor;
         this.containerInstanceFactory = this.delegate.containerInstanceFactory().getClass() == ContainerInstanceFactory.PlaceholderContainerInstanceFactory.class
-                // ? () -> BeanUtils.createNewInstance(nestedBeanMetadata.getConstructor(), (Object[]) null)
                 ? nestedBeanMetadata::createNewInstanceForDecoding
                 : BeanUtils.createNewInstance(this.xtreamField.containerInstanceFactory(), (Object[]) null);
     }
@@ -69,24 +67,10 @@ public class NestedBeanPropertyMetadata extends BasicBeanPropertyMetadata {
                 : input.readSlice(length);
 
         final FieldCodec.DeserializeContext newContext = new DefaultDeserializeContext(context, instance);
-        for (final BeanPropertyMetadata pm : this.nestedBeanMetadata.getPropertyMetadataList()) {
-            if (pm.isDerived() || !pm.conditionEvaluator().evaluate(newContext)) {
-                newContext.evaluationContext().setVariable(pm.name(), null);
-                continue;
-            }
-            final Object value = pm.decodePropertyValue(newContext, slice);
-            newContext.evaluationContext().setVariable(pm.name(), value);
-            pm.setProperty(instance, value);
-
-            // 内联求值：嵌套 Bean 的源字段解码后立即计算依赖它的派生字段值
-            if (this.nestedBeanMetadata.hasDerivedFields()) {
-                XtreamFieldUtils.applyDerivedFieldsInline(value, pm.name(), nestedBeanMetadata, (derived, derivedVal) -> {
-                    derived.setProperty(instance, derivedVal);
-                    newContext.evaluationContext().setVariable(derived.name(), derivedVal);
-                });
-            }
+        if (!nestedBeanMetadata.getRawType().isRecord()) {
+            return this.decodePojoFields(newContext, slice, instance, false);
         }
-        return instance;
+        return this.decodeRecordFields(newContext, slice, instance, false);
     }
 
     @Override
@@ -101,14 +85,62 @@ public class NestedBeanPropertyMetadata extends BasicBeanPropertyMetadata {
         final NestedFieldSpan nestedFieldSpan = codecTracker.startNewNestedFieldSpan(this, this.getClass().getSimpleName(), null);
         final int indexBeforeRead = slice.readerIndex();
         final FieldCodec.DeserializeContext newContext = new DefaultDeserializeContext(context, instance);
+        final Object result;
+        if (!nestedBeanMetadata.getRawType().isRecord()) {
+            result = this.decodePojoFields(newContext, slice, instance, true);
+        } else {
+            result = this.decodeRecordFields(newContext, slice, instance, true);
+        }
+        nestedFieldSpan.setHexString(FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead));
+        codecTracker.finishCurrentSpan();
+        return result;
+    }
+
+
+    private Object decodeRecordFields(FieldCodec.DeserializeContext newContext, ByteBuf slice, Object instance, boolean useTracker) {
+        final @Nullable Object[] fieldValues = new @Nullable Object[this.nestedBeanMetadata.getPropertyMetadataList().size()];
+        @SuppressWarnings("unchecked") final Map<String, @Nullable Object> map = (Map<String, Object>) instance;
+
         for (final BeanPropertyMetadata pm : this.nestedBeanMetadata.getPropertyMetadataList()) {
             if (pm.isDerived() || !pm.conditionEvaluator().evaluate(newContext)) {
                 newContext.evaluationContext().setVariable(pm.name(), null);
                 continue;
             }
-            final Object value = pm.decodePropertyValueWithTracker(newContext, slice);
-            pm.setProperty(instance, value);
+            final Object value = useTracker
+                    ? pm.decodePropertyValueWithTracker(newContext, slice)
+                    : pm.decodePropertyValue(newContext, slice);
             newContext.evaluationContext().setVariable(pm.name(), value);
+            map.put(pm.name(), value);
+            final int idx = nestedBeanMetadata.propertyIndex(pm.name());
+            if (idx >= 0) {
+                fieldValues[idx] = value;
+            }
+
+            if (this.nestedBeanMetadata.hasDerivedFields()) {
+                XtreamFieldUtils.applyDerivedFieldsInline(value, pm.name(), nestedBeanMetadata, (derived, derivedVal) -> {
+                    map.put(derived.name(), derivedVal);
+                    final int derivedIndex = nestedBeanMetadata.propertyIndex(derived.name());
+                    if (derivedIndex >= 0) {
+                        fieldValues[derivedIndex] = derivedVal;
+                    }
+                    newContext.evaluationContext().setVariable(derived.name(), derivedVal);
+                });
+            }
+        }
+        return nestedBeanMetadata.createNewRecordInstance(fieldValues);
+    }
+
+    private Object decodePojoFields(FieldCodec.DeserializeContext newContext, ByteBuf slice, Object instance, boolean useTracker) {
+        for (final BeanPropertyMetadata pm : this.nestedBeanMetadata.getPropertyMetadataList()) {
+            if (pm.isDerived() || !pm.conditionEvaluator().evaluate(newContext)) {
+                newContext.evaluationContext().setVariable(pm.name(), null);
+                continue;
+            }
+            final Object value = useTracker
+                    ? pm.decodePropertyValueWithTracker(newContext, slice)
+                    : pm.decodePropertyValue(newContext, slice);
+            newContext.evaluationContext().setVariable(pm.name(), value);
+            pm.setProperty(instance, value);
 
             // 内联求值：嵌套 Bean 的源字段解码后立即计算依赖它的派生字段值
             if (this.nestedBeanMetadata.hasDerivedFields()) {
@@ -118,8 +150,6 @@ public class NestedBeanPropertyMetadata extends BasicBeanPropertyMetadata {
                 });
             }
         }
-        nestedFieldSpan.setHexString(FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead));
-        codecTracker.finishCurrentSpan();
         return instance;
     }
 
@@ -164,6 +194,11 @@ public class NestedBeanPropertyMetadata extends BasicBeanPropertyMetadata {
     @Override
     public FieldLengthExtractor fieldLengthExtractor() {
         return this.fieldLengthExtractor;
+    }
+
+    @Override
+    public final boolean isEncodedLength() {
+        return false;
     }
 
 }

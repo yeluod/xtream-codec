@@ -33,6 +33,7 @@ import static java.util.Collections.emptyMap;
 /**
  * @author hylexus
  * @author opencode (AI)
+ * @author Codex (AI)
  */
 public class BeanMetadata {
     private static final Logger log = LoggerFactory.getLogger(BeanMetadata.class);
@@ -49,14 +50,23 @@ public class BeanMetadata {
     private final Map<String, Integer> propertyIndex;
     // 缓存是否有派生字段，避免 decode/encode 热路径中反复查询 Map.isEmpty()
     private final boolean hasDerivedFields;
+    // 编码长度计划；为空时编码器走普通路径
+    private final @Nullable EncodedLengthPlan encodedLengthPlan;
 
     public BeanMetadata(Class<?> rawType, Constructor<?> constructor, List<BeanPropertyMetadata> propertyMetadataList) {
-        this(rawType, constructor, propertyMetadataList, emptyMap(), emptyMap());
+        this(rawType, constructor, propertyMetadataList, emptyMap(), emptyMap(), null);
     }
 
     public BeanMetadata(Class<?> rawType, Constructor<?> constructor, List<BeanPropertyMetadata> propertyMetadataList,
                         Map<String, List<BeanPropertyMetadata>> derivedBySource,
                         Map<String, BeanPropertyMetadata> reverseDerivedBySource) {
+        this(rawType, constructor, propertyMetadataList, derivedBySource, reverseDerivedBySource, null);
+    }
+
+    public BeanMetadata(Class<?> rawType, Constructor<?> constructor, List<BeanPropertyMetadata> propertyMetadataList,
+                        Map<String, List<BeanPropertyMetadata>> derivedBySource,
+                        Map<String, BeanPropertyMetadata> reverseDerivedBySource,
+                        @Nullable EncodedLengthPlan encodedLengthPlan) {
         this.rawType = rawType;
         this.constructor = constructor;
         this.propertyMetadataList = propertyMetadataList;
@@ -65,6 +75,7 @@ public class BeanMetadata {
         this.reverseDerivedBySource = reverseDerivedBySource;
         this.propertyIndex = buildPropertyIndex(propertyMetadataList);
         this.hasDerivedFields = !derivedBySource.isEmpty();
+        this.encodedLengthPlan = encodedLengthPlan;
     }
 
     private static Map<String, Integer> buildPropertyIndex(List<BeanPropertyMetadata> list) {
@@ -178,6 +189,22 @@ public class BeanMetadata {
      */
     public boolean hasDerivedFields() {
         return this.hasDerivedFields;
+    }
+
+    /**
+     * @return 是否有任意 {@code @EncodedLength} 字段；无编码长度字段时编码可直接跳过追踪逻辑
+     * @since 0.7.0
+     */
+    public boolean hasEncodedLengthField() {
+        return this.encodedLengthPlan != null;
+    }
+
+    /**
+     * @return 编码长度计划；无 {@code @EncodedLength} 字段时返回 {@code null}
+     * @since 0.7.0
+     */
+    public @Nullable EncodedLengthPlan getEncodedLengthPlan() {
+        return this.encodedLengthPlan;
     }
 
     /**
