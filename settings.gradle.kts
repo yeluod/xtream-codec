@@ -1,5 +1,5 @@
 pluginManagement {
-    val defaultSpringBootBomVersion: String by settings
+    val defaultSpringBootBomVersion = providers.gradleProperty("defaultSpringBootBomVersion").get()
     plugins {
         id("io.spring.dependency-management") version "1.1.7" apply false
         id("org.springframework.boot") version defaultSpringBootBomVersion apply false

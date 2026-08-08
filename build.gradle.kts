@@ -55,9 +55,9 @@ configure(subprojects) {
     }
     logInfo2("configuring project: ${project.name}")
 
-    apply(plugin = "java-library")
+    pluginManager.apply("java-library")
     if (project.errorPronePluginEnabled()) {
-        apply(plugin = "net.ltgt.errorprone")
+        pluginManager.apply("net.ltgt.errorprone")
     }
     java {
         sourceCompatibility = JavaVersion.toVersion(xtreamConfig.javaVersion)
@@ -110,7 +110,7 @@ configure(subprojects) {
         }
     }
 
-    apply(plugin = "io.spring.dependency-management")
+    pluginManager.apply("io.spring.dependency-management")
     dependencyManagement {
         resolutionStrategy {
             cacheChangingModulesFor(0, TimeUnit.SECONDS)
@@ -173,7 +173,7 @@ configure(subprojects) {
         // common end
     }
 
-    apply(plugin = "checkstyle")
+    pluginManager.apply("checkstyle")
     checkstyle {
         toolVersion = "10.23.0"
         configDirectory.set(rootProject.file("build-script/checkstyle/"))
@@ -196,7 +196,7 @@ configure(subprojects) {
 
     // 本项目开源协议头
     if (xtreamConfig.licenseCheckerEnabled) {
-        apply(plugin = "net.minecraftforge.licenser")
+        pluginManager.apply("net.minecraftforge.licenser")
         val creationYear = DateTimeFormatter.ofPattern("yyyy").format(LocalDate.now())
         configure<net.minecraftforge.licenser.LicenseExtension> {
             // setHeader(rootProject.file("build-script/license/license-header"))
@@ -210,7 +210,7 @@ configure(subprojects) {
         }
     }
 
-    apply(plugin = "com.github.jk1.dependency-license-report")
+    pluginManager.apply("com.github.jk1.dependency-license-report")
     // 第三方依赖 license
     licenseReport {
         // By default, this plugin will collect the union of all licenses from
@@ -249,7 +249,7 @@ configure(subprojects) {
         allowedLicensesFile = rootProject.file("build-script/license/allowed-licenses.json")
     }
 
-    apply(plugin = "com.namics.oss.gradle.license-enforce-plugin")
+    pluginManager.apply("com.namics.oss.gradle.license-enforce-plugin")
     tasks.enforceLicenses {
         allowedCategories = listOf("Apache", "MIT")
         allowedLicenses = listOf("Mulan Permissive Software License, Version 2")
@@ -319,22 +319,26 @@ configure(subprojects) {
         logging.captureStandardOutput(LogLevel.INFO)
     }
 
-    val sourcesJar by tasks.registering(Jar::class) {
+    val sourcesJar = tasks.register<Jar>("sourcesJar") {
+        group = JavaBasePlugin.DOCUMENTATION_GROUP
+        description = "Assembles a jar archive containing the main source files."
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         archiveClassifier.set("sources")
         from(sourceSets.getByName("main").java.srcDirs)
     }
 
-    val javaDocJar by tasks.registering(Jar::class) {
+    val javaDocJar = tasks.register<Jar>("javaDocJar") {
+        group = JavaBasePlugin.DOCUMENTATION_GROUP
+        description = "Assembles a jar archive containing the generated Javadoc."
         archiveClassifier.set("javadoc")
         from(tasks.named("javadoc"))
     }
 
-    apply(plugin = "maven-publish")
+    pluginManager.apply("maven-publish")
     val stagingRepositoryPath = xtreamConfig.centralPortalArtifactsTempDir + "/${project.name}"
     if (isMavenPublications()) {
         if (xtreamConfig.centralPortalMavenRepoEnabled) {
-            apply(plugin = "io.gitee.pkmer.pkmerboot-central-publisher")
+            pluginManager.apply("io.gitee.pkmer.pkmerboot-central-publisher")
             tasks.withType<io.gitee.pkmer.tasks.BundleTask>().configureEach {
                 dependsOn(tasks.test, tasks.checkstyleTest, tasks.checkstyleMain)
                 // 只有部分模块有这两个任务
@@ -458,7 +462,7 @@ configure(subprojects) {
         }
 
         if (xtreamConfig.needSign) {
-            apply(plugin = "signing")
+            pluginManager.apply("signing")
             signing {
                 // 如果需要签名
                 // 记得将 build-script/gradle/debug-template.gradle.properties 中的 gpg 配置放到 ~/.gradle/gradle.properties

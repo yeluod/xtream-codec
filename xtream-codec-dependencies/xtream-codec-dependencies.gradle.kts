@@ -35,7 +35,7 @@ dependencies {
 val mavenRepoConfig = xtreamConfig.mavenRepoConfig
 val stagingRepositoryPath = xtreamConfig.centralPortalBomTempDir + "/${project.name}"
 if (xtreamConfig.centralPortalMavenRepoEnabled) {
-    apply(plugin = "io.gitee.pkmer.pkmerboot-central-publisher")
+    pluginManager.apply("io.gitee.pkmer.pkmerboot-central-publisher")
     // 延迟配置，在插件完全应用后再执行
     afterEvaluate {
         project.extensions.findByType<io.gitee.pkmer.extension.PkmerBootPluginExtension>()?.apply {
