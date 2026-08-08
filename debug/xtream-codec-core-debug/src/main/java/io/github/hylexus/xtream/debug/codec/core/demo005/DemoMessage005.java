@@ -16,6 +16,7 @@
 
 package io.github.hylexus.xtream.debug.codec.core.demo005;
 
+import io.github.hylexus.xtream.codec.base.annotation.ReferencedByDocs;
 import io.github.hylexus.xtream.codec.core.annotation.PrependLengthFieldType;
 import io.github.hylexus.xtream.codec.core.type.Preset;
 
@@ -24,6 +25,13 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.StringJoiner;
 
+/**
+ * 继承 {@link BaseMessage} 的消息体示例。
+ *
+ * @author hylexus
+ * @author Codex (AI)
+ */
+@ReferencedByDocs("guide/core/annotation-driven/encoded-length.md")
 @SuppressWarnings("LombokGetterMayBeUsed")
 public class DemoMessage005 extends BaseMessage {
 
@@ -41,13 +49,13 @@ public class DemoMessage005 extends BaseMessage {
     @Preset.RustStyle.byte_array(prependLengthFieldType = PrependLengthFieldType.u8)
     private byte[] bmsBatteryCount;
 
-    @Preset.RustStyle.list(lengthExpression = "getBmsBatteriesSize()")
+    @Preset.RustStyle.list(lengthExpression = "getBmsBatteriesEncodedLength()")
     private List<BmsBattery> bmsBatteries;
 
     public record BmsBattery(@Preset.RustStyle.str(length = 24) String id) {
     }
 
-    public int getBmsBatteriesSize() {
+    public int getBmsBatteriesEncodedLength() {
         int sum = 0;
         for (final byte c : this.bmsBatteryCount) {
             sum += c;

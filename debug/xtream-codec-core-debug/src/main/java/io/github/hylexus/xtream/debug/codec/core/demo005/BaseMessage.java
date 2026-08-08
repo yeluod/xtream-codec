@@ -16,11 +16,19 @@
 
 package io.github.hylexus.xtream.debug.codec.core.demo005;
 
+import io.github.hylexus.xtream.codec.base.annotation.ReferencedByDocs;
 import io.github.hylexus.xtream.codec.core.annotation.EncodedLength;
 import io.github.hylexus.xtream.codec.core.type.Preset;
 
 import java.util.StringJoiner;
 
+/**
+ * 将公共消息头和校验字段定义在父类中，消息体字段交给具体消息子类声明。
+ *
+ * @author hylexus
+ * @author Codex (AI)
+ */
+@ReferencedByDocs("guide/core/annotation-driven/encoded-length.md")
 @SuppressWarnings("LombokGetterMayBeUsed")
 public class BaseMessage {
     @Preset.RustStyle.str(order = -600, length = 2)
@@ -38,6 +46,7 @@ public class BaseMessage {
     @Preset.RustStyle.u8(order = -200)
     protected int encryptFlag;
 
+    // 自动统计后续子类消息体的编码字节数，不包含 checksum
     @Preset.RustStyle.u16(order = -100)
     @EncodedLength(until = "checksum")
     protected int dataLength;

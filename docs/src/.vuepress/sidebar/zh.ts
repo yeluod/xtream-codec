@@ -32,6 +32,7 @@ export const zhSidebar = sidebar({
                         '/guide/core/annotation-driven/expression.md',
                         '/guide/core/annotation-driven/builtin-annotations.md',
                         '/guide/core/annotation-driven/derived-field.md',
+                        '/guide/core/annotation-driven/encoded-length.md',
                         '/guide/core/annotation-driven/custom-annotation.md',
                         '/guide/core/annotation-driven/entity-codec.md',
                         '/guide/core/annotation-driven/entity-codec-tracker.md',

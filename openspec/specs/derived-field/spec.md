@@ -225,9 +225,7 @@ public interface FieldTransformer<S, T> {
 - **THEN** 两个层级的派生字段各自独立计算，互不干扰
 - **THEN** 外层 ByteBuf 读取顺序不受内层派生字段影响
 
-## Documentation Requirements
-
-以下需求定义了 `@DerivedField` 文档的行为规范，由 `derived-field-docs` 变更引入。
+<!-- 以下 requirement 定义了 `@DerivedField` 文档的行为规范。 -->
 
 ### Requirement: 文档页存在并可访问
 

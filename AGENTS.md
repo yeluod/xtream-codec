@@ -1,26 +1,132 @@
 # AGENTS.md - xtream-codec
 
-## Build
+## Repository Facts
 
-- **JDK**: 21 required
-- **Build tool**: Gradle (Kotlin DSL) via `./gradlew`
-- **Run single test**: `./gradlew :module:test --tests "FullyQualifiedTestName"`
-- **Build with checkstyle**: `./gradlew clean build -P xtream.backend.build.checkstyle.enabled=true`
-- **Skip slow checks locally**: Uses properties in `gradle.properties`:
-    - `xtream.backend.build.checkstyle.enabled=false`
-    - `xtream.backend.build.errorprone.enabled=false`
+- **Project version**: `0.7.0-alpha.0`, read from `gradle.properties` (`projectVersion` is the source of truth)
+- **JDK**: 21, managed by `mise.toml` as `temurin-21`
+- **Node.js**: 22, required by `docs/package.json`
+- **pnpm**: 9.12.1 or newer for the docs module
+- **Gradle**: 9.5.1 through `./gradlew`
+- **Build scripts**: Kotlin DSL
+- **OpenSpec schema**: `spec-driven`, configured in `openspec/config.yaml`
+
+## Build and Test
+
+Common commands:
+
+```bash
+# Core module tests
+./gradlew :xtream-codec-core:test
+
+# Run one test class
+./gradlew :module:test --tests "io.example.FullyQualifiedTestName"
+
+# Debug/demo module test
+./gradlew :debug:xtream-codec-core-debug:test \
+  --tests "io.github.hylexus.xtream.debug.codec.core.demo005.DemoMessage005Test"
+
+# Full local build with slow checks disabled
+./gradlew build \
+  -P xtream.backend.build.checkstyle.enabled=false \
+  -P xtream.backend.build.errorprone.enabled=false
+
+# Full build with checkstyle
+./gradlew clean build -P xtream.backend.build.checkstyle.enabled=true
+
+# Update project version references outside release notes
+./gradlew updateVersion
+```
+
+The default local settings in `gradle.properties` disable checkstyle and Error Prone:
+
+- `xtream.backend.build.checkstyle.enabled=false`
+- `xtream.backend.build.errorprone.enabled=false`
+
+If `JAVA_HOME` points to a removed JDK, use the JDK resolved by `mise` before running Gradle:
+
+```bash
+JAVA_HOME="$(mise where java)" ./gradlew <task>
+```
 
 ## Module Structure
 
 ```
-xtream-codec-core/          # Core codec (annotation-driven)
+xtream-codec-dependencies/     # Dependency BOM/constraints
+xtream-codec-base/             # Shared base APIs, expressions, utilities
+xtream-codec-core/             # Annotation-driven codec
 xtream-codec-server-reactive/  # Async non-blocking TCP/UDP server
-ext/jt/jt-808-server-spring-boot-starter-reactive/   # JT/T 808 impl
-ext/jt/jt-808-server-dashboard-spring-boot-starter-reactive/  # JT/T 808 Dashboard
-ext/jt/jt-1078-server-spring-boot-starter-reactive/  # JT/T 1078 impl
-quick-start/              # Runnable examples
-debug/                   # Debug modules (ignore)
+ext/jt/                        # JT/T 808 and JT/T 1078 extensions
+quick-start/                   # Runnable quick-start applications
+debug/                         # Debug entities, protocol demos, and focused tests
+docs/                          # VuePress documentation site
+openspec/                      # Change proposals, specs, and archived changes
+build-script/                 # Shared Gradle, checkstyle, license, and publishing scripts
 ```
+
+`debug/` is part of the verification and documentation workflow. Do not ignore it when a change touches demos,
+documentation examples, or debug-module tests.
+
+## Documentation
+
+The docs site is VuePress/Vite:
+
+```bash
+cd docs
+pnpm docs:dev       # local server
+pnpm docs:build     # production build
+pnpm docs:clean-dev # dev server with a clean VuePress cache
+```
+
+`docs/src/.vuepress/config.ts` defines source-code import aliases:
+
+- `@project` → repository root
+- `@core-test` → `xtream-codec-core/src/test/java`
+- `@core-debug-test` → `debug/xtream-codec-core-debug/src/test/java`
+- `@core-debug` → `debug/xtream-codec-core-debug/src/main/java`
+- `@src` → `docs/src/code-snippet`
+
+When a Java test, demo, or type is referenced by a docs page, annotate the type with:
+
+```java
+@ReferencedByDocs("guide/core/annotation-driven/example.md")
+```
+
+The path is relative to `docs/src/`. Keep the annotation path and the VuePress `@[code](...)` import path in sync.
+The docs build must be run when changing referenced source snippets.
+
+## OpenSpec Workflow
+
+Use the OpenSpec CLI and the repository-local skills for change work:
+
+```bash
+# Discover active changes
+openspec list --json
+
+# Create a new change; do not manually scaffold openspec/changes/<name>
+openspec new change "<change-name>"
+
+# Check artifacts and implementation task progress
+openspec status --change "<change-name>" --json
+openspec instructions apply --change "<change-name>" --json
+
+# Validate a change or all specs
+openspec validate "<change-name>" --strict
+openspec validate --specs
+
+# Archive after implementation and task completion
+openspec instructions archive --change "<change-name>" --json
+```
+
+For a new capability, the main spec must contain one `## Purpose` section and one `## Requirements` section.
+Requirements use `### Requirement:` and scenarios use exactly `#### Scenario:`. Do not append a second
+`## ... Requirements` section; merge additional requirements into the main `## Requirements` section before archive.
+
+When archiving a change with delta specs:
+
+1. Compare each delta under `openspec/changes/<name>/specs/` with its corresponding main spec under `openspec/specs/`.
+2. Sync new or modified requirements into the main spec.
+3. Validate the synced main spec and the change with `--strict`.
+4. Move the completed change to `openspec/changes/archive/YYYY-MM-DD-<change-name>/`.
 
 ## 1. Think Before Coding
 
@@ -89,22 +195,24 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### 5.1 @since Tag Version
 
-When adding `@since` to JavaDoc, the value MUST match `projectVersion` in `gradle.properties`.
+When adding `@since` to JavaDoc, use the stable public release line, not the current pre-release artifact version.
 
-- Current version: `0.6.0` (`projectVersion=0.6.0` in `gradle.properties`)
-- New APIs added now → `@since 0.6.0`
-- Do NOT hardcode outdated versions; always check `gradle.properties` first.
+- Current artifact version: `0.7.0-alpha.0` (`projectVersion=0.7.0-alpha.0` in `gradle.properties`)
+- Current public API `@since` target: `0.7.0`
+- New APIs added now → `@since 0.7.0`
+- Strip pre-release suffixes such as `-alpha.*`, `-beta.*`, and `-rc.*` from `projectVersion` for Javadoc.
+- Do NOT hardcode outdated versions; always check `gradle.properties` first and derive the stable release line.
 
 ```java
 // Correct (new code):
 /**
- * @since 0.6.0
+ * @since 0.7.0
  */
 default boolean isDerived() { return false; }
 
 // Wrong (version doesn't match gradle.properties):
 /**
- * @since 0.4.0
+ * @since 0.7.0-alpha.0
  */
 default boolean isDerived() { return false; }
 ```
@@ -145,3 +253,19 @@ StatusEnum resolveStatusCode(int code);
 @Nullable
 StatusEnum resolveStatusCode(int code);
 ```
+
+### 5.4 Javadoc Authors
+
+When adding or substantially updating a class-level Javadoc:
+
+- Preserve existing `@author` entries.
+- Add `@author Codex (AI)` when Codex contributed to the change.
+- Do not replace the human author's attribution with the AI attribution.
+
+## 6. Change Safety
+
+- Inspect `git status --short` before editing.
+- Never revert or clean unrelated user changes.
+- Use `apply_patch` for manual file edits.
+- Keep changes scoped to the request; remove only imports or code made unused by your own change.
+- Before finishing, run the narrowest relevant tests, `git diff --check`, and the relevant style/docs validation.
