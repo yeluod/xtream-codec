@@ -5,7 +5,34 @@ article: false
 
 # Latest
 
-## 0.6.0(2026-06-02)
+## 0.7.0 (2026-08-08)
+
+### 📔 Documentation
+
+- 新增文档 [@EncodedLength](https://iotplanet.top/xtream-codec/guide/core/annotation-driven/encoded-length.html)
+
+### ⭐ New Features
+
+- 新增 [@EncodedLength](https://iotplanet.top/xtream-codec/guide/core/annotation-driven/encoded-length.html) 注解，支持编码时自动计算指定字段范围的实际编码字节数并回填到长度字段
+- `@EncodedLength` 支持 `from` / `until` 声明左闭右开的字段范围；未指定边界时可从长度字段之后开始，或延伸到实体末尾
+- `@EncodedLength` 支持 `u8`、`u16`、`u32` 无符号整数字段，并在元数据注册阶段校验非法引用、字段顺序、重复声明和不支持的长度字段格式
+
+### 🚀 Improvements
+
+- 编码器新增编码长度计划和运行时辅助逻辑；普通实体保持原有快速路径，带 `@EncodedLength` 的实体在编码阶段按实际写入字节数回填长度
+- 更新 `DemoMessage005` 示例，演示 `@EncodedLength` 的典型协议体长度回填场景
+
+### 🔨 Dependency Updates
+
+- Gradle Wrapper 升级至 `9.7.0`
+- 更新 Gradle Kotlin DSL 写法，替换已废弃或不推荐的 `settings` 委托、`tasks.registering` 和 `apply(plugin = "...")` 用法
+
+### ❤️ Contributors
+
+- [OpenAI Codex](https://openai.com/codex/)
+- [@hylexus](https://github.com/hylexus)
+
+## 0.6.0 (2026-06-02)
 
 ### 📔 Documentation
 
@@ -21,7 +48,7 @@ article: false
 - [opencode AI](https://github.com/anomalyco/opencode)
 - [@hylexus](https://github.com/hylexus)
 
-## 0.5.0(2026-05-30)
+## 0.5.0 (2026-05-30)
 
 ### 📔 Documentation
 
@@ -58,13 +85,13 @@ article: false
 
 - 新增内置编解码器 `StringFieldCodecAscII`
 
-## 0.5.0-rc.3(2026-05-27)
+## 0.5.0-rc.3 (2026-05-27)
 
 ### ⭐ New Features
 
 - 重构 `AbstractMapFieldCodec`
 
-## 0.5.0-rc.2(2026-05-22)
+## 0.5.0-rc.2 (2026-05-22)
 
 ### 🎯 Highlights
 
@@ -80,13 +107,13 @@ article: false
 - [@dfEric](https://github.com/dfEric)
 - [@hylexus](https://github.com/hylexus)
 
-## 0.5.0-rc.1(2026-01-11)
+## 0.5.0-rc.1 (2026-01-11)
 
 ### ⭐ New Features
 
 - 兼容低版本 `spring-boot` [#11](https://github.com/hylexus/xtream-codec/issues/11)
 
-## 0.4.0(2026-01-03)
+## 0.4.0 (2026-01-03)
 
 ### ⭐ New Features
 
@@ -97,7 +124,7 @@ article: false
     - `io.github.hylexus.xtream.codec.core.type.simple.DataField`
 - 可观测性 - 后端 [#8](https://github.com/hylexus/xtream-codec/issues/8)
 
-## 0.3.0(2025-10-26)
+## 0.3.0 (2025-10-26)
 
 ### 🎯 Highlights
 
@@ -117,7 +144,7 @@ article: false
 - 可空性标记全部使用 [jspecify](https://jspecify.dev/)
 - 彻底移除 `jakarta.annotation-api`
 
-## 0.2.0(2025-10-18)
+## 0.2.0 (2025-10-18)
 
 ### ⭐ New Features
 
