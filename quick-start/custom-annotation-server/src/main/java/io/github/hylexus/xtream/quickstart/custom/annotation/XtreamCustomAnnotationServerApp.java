@@ -23,6 +23,7 @@ import io.github.hylexus.xtream.codec.server.reactive.spec.handler.builtin.Loggi
 import io.github.hylexus.xtream.codec.server.reactive.spec.impl.LoggingXtreamFilter;
 import io.github.hylexus.xtream.codec.server.reactive.spec.resources.DefaultXtreamSchedulerRegistry;
 import io.github.hylexus.xtream.quickstart.custom.annotation.handler.DemoMessageHandlerMapping;
+import io.github.hylexus.xtream.codec.base.annotation.ReferencedByDocs;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,6 +87,7 @@ import reactor.core.scheduler.Schedulers;
 /// # 报警上报 (msgType=0x15): alarmType=1(通用报警), desc="overheat"
 /// echo -ne '\x12\x34\x56\x78\x15\x00\x0b\x00\x01\x08\x6f\x76\x65\x72\x68\x65\x61\x74' | nc localhost 9527
 /// ```
+@ReferencedByDocs("guide/server/samples/custom-demo-protocol/handler-demo.md")
 public class XtreamCustomAnnotationServerApp {
 
     private static final Logger log = LoggerFactory.getLogger(XtreamCustomAnnotationServerApp.class);

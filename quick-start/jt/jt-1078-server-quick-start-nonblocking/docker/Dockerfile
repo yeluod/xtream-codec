@@ -1,4 +1,4 @@
-FROM azul/zulu-openjdk:21
+FROM m.daocloud.io/docker.io/library/eclipse-temurin:21-jre
 LABEL authors="hylexus"
 
 WORKDIR /app/

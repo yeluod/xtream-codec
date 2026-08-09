@@ -28,6 +28,7 @@ import io.github.hylexus.xtream.quickstart.custom.annotation.entity.request.Temp
 import io.github.hylexus.xtream.quickstart.custom.annotation.entity.response.GenericAckResponse;
 import io.github.hylexus.xtream.quickstart.custom.annotation.entity.response.RegisterAckResponse;
 import io.github.hylexus.xtream.quickstart.custom.annotation.entity.response.ServerTimeResponse;
+import io.github.hylexus.xtream.codec.base.annotation.ReferencedByDocs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -37,6 +38,7 @@ import java.time.LocalDateTime;
 /// X-IoT Demo 协议的请求处理器。
 ///
 /// 被 `@DemoMessageHandler` 标记后，`DemoMessageHandlerMapping` 在扫描时会自动发现此类。
+@ReferencedByDocs("guide/server/samples/custom-demo-protocol/handler-demo.md")
 @DemoMessageHandler
 public class MyDemoHandler {
 

@@ -160,57 +160,17 @@ new DemoMessageHandlerMapping(
 
 ### 3.1 心跳处理 — 通用应答
 
-```java
+直接引用后端源码，避免文档和实现分叉：
 
-@DemoMessageHandler
-public class MyDemoHandler {
-
-    @DemoMessageMapping(msgType = {0x10})
-    @XtreamResponseBody
-    public Mono<GenericAckResponse> handleHeartbeat() {
-        log.info("Received heartbeat");
-        return Mono.just(new GenericAckResponse(0x10, 0));
-    }
-}
-```
+@[code{47-62}](@project/quick-start/custom-annotation-server/src/main/java/io/github/hylexus/xtream/quickstart/custom/annotation/handler/MyDemoHandler.java)
 
 `@XtreamResponseBody` 是框架内置的回写注解。handler 方法只需返回 POJO，`XtreamResponseBodyHandlerResultHandler` 会自动使用 `EntityCodec` 将其编码为二进制并写回响应，无需手动操作 `ByteBuf`。
 
 ### 3.2 时间查询 — @XtreamResponseBody 自动编码响应
 
-```java
+对应的后端实体也直接引用源码：
 
-@DemoMessageMapping(msgType = {0x11})
-@XtreamResponseBody
-public Mono<ServerTimeResponse> handleTimeQuery() {
-    final LocalDateTime now = LocalDateTime.now();
-    log.info("Received time query, responding with time: {}", now);
-    return Mono.just(new ServerTimeResponse(now));
-}
-```
-
-对应的响应实体：
-
-```java
-
-@Getter
-@Setter
-public class ServerTimeResponse extends AbstractEntity {
-
-    @Preset.JtStyle.BcdDateTime
-    private LocalDateTime serverTime;
-
-    public ServerTimeResponse() {
-        this.msgType = 0x81;
-    }
-
-    public ServerTimeResponse(LocalDateTime serverTime) {
-        this();
-        this.serverTime = serverTime;
-        this.bodyLength = 6;
-    }
-}
-```
+@[code{28-62}](@project/quick-start/custom-annotation-server/src/main/java/io/github/hylexus/xtream/quickstart/custom/annotation/entity/response/ServerTimeResponse.java)
 
 响应体使用 `@Preset.JtStyle.BcdDateTime` 注解编码为 BCD[6] `yyMMddHHmmss` 格式，非 i64 时间戳。
 
@@ -224,116 +184,35 @@ public class ServerTimeResponse extends AbstractEntity {
 
 ### 3.3 温湿度上报 — @XtreamRequestBody 注入实体
 
-```java
+`@XtreamRequestBody` 是框架内置注解，自动将消息体解码为指定实体类。对应方法如下：
 
-@DemoMessageMapping(msgType = {0x12})
-@XtreamResponseBody
-public Mono<GenericAckResponse> handleTemperatureReport(
-        @XtreamRequestBody TemperatureReport report) {
-    log.info("Received temperature report: {}°C, {}%RH",
-            report.temperatureInCelsius(), report.humidityInPercent());
-    return Mono.just(new GenericAckResponse(0x12, 0));
-}
-```
-
-`@XtreamRequestBody` 是框架内置注解，自动将消息体解码为指定实体类。方法返回 `Mono<GenericAckResponse>`，框架自动编码并写回响应。
+@[code{90-108}](@project/quick-start/custom-annotation-server/src/main/java/io/github/hylexus/xtream/quickstart/custom/annotation/handler/MyDemoHandler.java)
 
 ### 3.4 多传感器上报 — @XtreamRequestBody 注入实体
 
-```java
+对应方法如下：
 
-@DemoMessageMapping(msgType = {0x13})
-@XtreamResponseBody
-public Mono<GenericAckResponse> handleMultiSensorReport(
-        @XtreamRequestBody MultiSensorData report) {
-    log.info("Received multi-sensor report: {}°C, {}%RH, {}hPa, {}m/s, ts={}",
-            report.temperatureInCelsius(), report.humidityInPercent(),
-            report.pressureInHpa(), report.windSpeedInMeterPerSecond(),
-            report.getTimestamp());
-    return Mono.just(new GenericAckResponse(0x13, 0));
-}
-```
+@[code{110-130}](@project/quick-start/custom-annotation-server/src/main/java/io/github/hylexus/xtream/quickstart/custom/annotation/handler/MyDemoHandler.java)
 
 ### 3.5 设备注册 — 混合注入 + 自定义调度器
 
-```java
+同时注入 `XtreamExchange` 和 `@XtreamRequestBody` 实体，框架按参数类型自动选择解析器。对应方法如下：
 
-@DemoMessageMapping(msgType = {0x14}, scheduler = "business")
-@XtreamResponseBody
-public Mono<RegisterAckResponse> handleDeviceRegister(
-        XtreamExchange exchange,
-        @XtreamRequestBody DeviceRegisterRequest request) {
-
-    log.info("Received device register: imei={}, productKey={}, remote={}",
-            request.getImei(), request.getProductKey(),
-            exchange.request().remoteAddress());
-    return Mono.just(new RegisterAckResponse(0, "registered OK"));
-}
-```
-
-同时注入 `XtreamExchange` 和 `@XtreamRequestBody` 实体，框架按参数类型自动选择解析器。
+@[code{133-156}](@project/quick-start/custom-annotation-server/src/main/java/io/github/hylexus/xtream/quickstart/custom/annotation/handler/MyDemoHandler.java)
 
 通过 `scheduler = "business"` 指定该方法运行在自定义的 `business` 调度器上（`Schedulers.newBoundedElastic(4, 100, "business")`），适用于设备注册等可能涉及 IO 或耗时操作的场景。
 
 ### 3.6 报警上报
 
-```java
+对应方法如下：
 
-@DemoMessageMapping(msgType = {0x15})
-@XtreamResponseBody
-public Mono<GenericAckResponse> handleAlarmReport(
-        @XtreamRequestBody AlarmReport report) {
-    log.info("Received alarm report: type={}, desc={}",
-            report.getAlarmType(), report.getDesc());
-    return Mono.just(new GenericAckResponse(0x15, 0));
-}
-```
+@[code{158-176}](@project/quick-start/custom-annotation-server/src/main/java/io/github/hylexus/xtream/quickstart/custom/annotation/handler/MyDemoHandler.java)
 
 ## 4. 服务端入口
 
-```java
-public class XtreamCustomAnnotationServerApp {
+直接引用后端服务端入口源码：
 
-    public static void main(String[] args) {
-        final DefaultXtreamSchedulerRegistry schedulerRegistry =
-                new DefaultXtreamSchedulerRegistry(
-                        Schedulers.parallel(),
-                        Schedulers.boundedElastic(),
-                        Schedulers.boundedElastic()
-                );
-        schedulerRegistry.registerScheduler("business",
-                Schedulers.newBoundedElastic(4, 100, "business"));
-
-        XtreamServers.tcp()
-                .name("custom-annotation-server")
-                .bind("0.0.0.0", 9527)
-                .customize(server -> server.doOnConnection(conn -> log.info("New connection: {}", conn)))
-                .pipeline(pipeline -> pipeline.addFirst(
-                        new LengthFieldBasedFrameDecoder(
-                                1024,
-                                5,      // lengthFieldOffset: magic(4) + msgType(1)
-                                2,      // lengthFieldLength: bodyLength 占 2 字节
-                                0,      // lengthAdjustment
-                                0       // initialBytesToStrip
-                        )
-                ))
-                .dispatch(dispatcher -> dispatcher
-                        .addHandlerMappings(new DemoMessageHandlerMapping(
-                                new String[]{
-                                    "io.github.hylexus.xtream.quickstart.custom.annotation"
-                                },
-                                cls -> BeanUtils.createNewInstance(cls, new Object[0]),
-                                schedulerRegistry
-                        ))
-                        .enableBuiltinHandlers(EntityCodec.DEFAULT)
-                        .addFilter(new LoggingXtreamFilter())
-                        .addExceptionHandler(new LoggingXtreamRequestExceptionHandler())
-                )
-                .build()
-                .start();
-    }
-}
-```
+@[code{95-131}](@project/quick-start/custom-annotation-server/src/main/java/io/github/hylexus/xtream/quickstart/custom/annotation/XtreamCustomAnnotationServerApp.java)
 
 关键配置：
 

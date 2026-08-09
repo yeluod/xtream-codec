@@ -18,6 +18,7 @@ package io.github.hylexus.xtream.quickstart.custom.annotation.entity.response;
 
 import io.github.hylexus.xtream.codec.core.type.Preset;
 import io.github.hylexus.xtream.quickstart.custom.annotation.entity.AbstractEntity;
+import io.github.hylexus.xtream.codec.base.annotation.ReferencedByDocs;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
@@ -41,6 +42,7 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @ToString(callSuper = true)
+@ReferencedByDocs("guide/server/samples/custom-demo-protocol/handler-demo.md")
 public class ServerTimeResponse extends AbstractEntity {
 
     // region 消息体 (6 bytes)
