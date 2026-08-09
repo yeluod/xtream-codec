@@ -19,6 +19,7 @@ package io.github.hylexus.xtream.codec.ext.jt808.boot.listener;
 import io.github.hylexus.xtream.codec.ext.jt808.boot.properties.XtreamJt808ServerProperties;
 import io.github.hylexus.xtream.codec.server.reactive.spec.impl.tcp.TcpXtreamServer;
 import io.github.hylexus.xtream.codec.server.reactive.spec.impl.udp.UdpXtreamServer;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -28,14 +29,14 @@ import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextRefreshedEvent;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class XtreamExtJt808ServerStartupListener implements ApplicationListener<ContextRefreshedEvent>, ApplicationContextAware {
     private static final Logger log = LoggerFactory.getLogger(XtreamExtJt808ServerStartupListener.class);
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private final XtreamJt808ServerProperties serverProps;
-    @SuppressWarnings("NullAway.Init")
-    private ApplicationContext applicationContext;
+    private @Nullable ApplicationContext applicationContext;
 
     public XtreamExtJt808ServerStartupListener(XtreamJt808ServerProperties serverProps) {
         this.serverProps = serverProps;
@@ -51,9 +52,10 @@ public class XtreamExtJt808ServerStartupListener implements ApplicationListener<
             return;
         }
 
-        if (initialized.compareAndSet(false, true) && event.getApplicationContext().getParent() == null) {
+        if (event.getApplicationContext().getParent() == null && initialized.compareAndSet(false, true)) {
+            final ApplicationContext context = Objects.requireNonNull(this.applicationContext);
             if (tcpServerEnabled) {
-                final Map<String, TcpXtreamServer> servers = applicationContext.getBeansOfType(TcpXtreamServer.class);
+                final Map<String, TcpXtreamServer> servers = context.getBeansOfType(TcpXtreamServer.class);
                 servers.forEach((name, tcpServer) -> {
                     // ...
                     tcpServer.start();
@@ -61,7 +63,7 @@ public class XtreamExtJt808ServerStartupListener implements ApplicationListener<
             }
 
             if (udpServerEnabled) {
-                final Map<String, UdpXtreamServer> servers = applicationContext.getBeansOfType(UdpXtreamServer.class);
+                final Map<String, UdpXtreamServer> servers = context.getBeansOfType(UdpXtreamServer.class);
                 servers.forEach((name, udpServer) -> {
                     // ...
                     udpServer.start();
