@@ -64,6 +64,5 @@ public class GenericAckResponse extends AbstractEntity {
         this();
         this.ackMsgType = ackMsgType;
         this.result = result;
-        this.bodyLength = 2;
     }
 }

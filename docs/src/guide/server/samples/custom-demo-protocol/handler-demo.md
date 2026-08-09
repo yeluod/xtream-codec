@@ -295,50 +295,41 @@ public Mono<GenericAckResponse> handleAlarmReport(
 public class XtreamCustomAnnotationServerApp {
 
     public static void main(String[] args) {
-        XtreamServerBuilder.newTcpServerBuilder()
-                .addServerCustomizer(server -> server
-                        .host("0.0.0.0")
-                        .port(9527)
-                        .doOnConnection(conn -> log.info("New connection: {}", conn))
-                        .doOnChannelInit((observer, channel, remoteAddress) -> {
-                            channel.pipeline().addFirst(
-                                    new LengthFieldBasedFrameDecoder(
-                                            1024,
-                                            5,      // lengthFieldOffset: magic(4) + msgType(1)
-                                            2,      // lengthFieldLength: bodyLength 占 2 字节
-                                            0,      // lengthAdjustment
-                                            0       // initialBytesToStrip
-                                    )
-                            );
-                        })
-                )
-                .addServerCustomizer(server -> {
-                    final DefaultXtreamSchedulerRegistry schedulerRegistry =
-                            new DefaultXtreamSchedulerRegistry(
-                                    Schedulers.parallel(),
-                                    Schedulers.boundedElastic(),
-                                    Schedulers.boundedElastic()
-                            );
-                    schedulerRegistry.registerScheduler("business",
-                            Schedulers.newBoundedElastic(4, 100, "business"));
+        final DefaultXtreamSchedulerRegistry schedulerRegistry =
+                new DefaultXtreamSchedulerRegistry(
+                        Schedulers.parallel(),
+                        Schedulers.boundedElastic(),
+                        Schedulers.boundedElastic()
+                );
+        schedulerRegistry.registerScheduler("business",
+                Schedulers.newBoundedElastic(4, 100, "business"));
 
-                    return server.handle(
-                            XtreamNettyHandlerAdapter.newTcpBuilder()
-                                    .addHandlerMappings(new DemoMessageHandlerMapping(
-                                            new String[]{
-                                                "io.github.hylexus.xtream.quickstart.custom.annotation"
-                                            },
-                                            cls -> BeanUtils.createNewInstance(cls, new Object[0]),
-                                            schedulerRegistry
-                                    ))
-                                    .enableBuiltinHandlerAdapters(EntityCodec.DEFAULT)
-                                    .enableBuiltinHandlerResultHandlers(EntityCodec.DEFAULT)
-                                    .addFilter(new LoggingXtreamFilter())
-                                    .addExceptionHandler(new LoggingXtreamRequestExceptionHandler())
-                                    .build()
-                    );
-                })
-                .build("custom-annotation-server")
+        XtreamServers.tcp()
+                .name("custom-annotation-server")
+                .bind("0.0.0.0", 9527)
+                .customize(server -> server.doOnConnection(conn -> log.info("New connection: {}", conn)))
+                .pipeline(pipeline -> pipeline.addFirst(
+                        new LengthFieldBasedFrameDecoder(
+                                1024,
+                                5,      // lengthFieldOffset: magic(4) + msgType(1)
+                                2,      // lengthFieldLength: bodyLength 占 2 字节
+                                0,      // lengthAdjustment
+                                0       // initialBytesToStrip
+                        )
+                ))
+                .dispatch(dispatcher -> dispatcher
+                        .addHandlerMappings(new DemoMessageHandlerMapping(
+                                new String[]{
+                                    "io.github.hylexus.xtream.quickstart.custom.annotation"
+                                },
+                                cls -> BeanUtils.createNewInstance(cls, new Object[0]),
+                                schedulerRegistry
+                        ))
+                        .enableBuiltinHandlers(EntityCodec.DEFAULT)
+                        .addFilter(new LoggingXtreamFilter())
+                        .addExceptionHandler(new LoggingXtreamRequestExceptionHandler())
+                )
+                .build()
                 .start();
     }
 }
@@ -351,8 +342,9 @@ public class XtreamCustomAnnotationServerApp {
 | `LengthFieldBasedFrameDecoder(1024, 5, 2, 0, 0)` | 解决 TCP 粘包，从第 5 字节读取 2 字节 bodyLength |
 | `new DemoMessageHandlerMapping(...)`              | 注册自定义 HandlerMapping（含自定义调度器）       |
 | `schedulerRegistry.registerScheduler("business")` | 注册业务调度器，用于设备注册等耗时操作                |
-| `enableBuiltinHandlerAdapters()`                  | 启用内置参数解析器（含 `@XtreamRequestBody`）   |
-| `enableBuiltinHandlerResultHandlers()`            | 启用内置返回值处理器                          |
+| `enableBuiltinHandlers(EntityCodec.DEFAULT)`    | 同时启用内置参数解析器和内置返回值处理器       |
+
+如果你需要更底层地控制 Reactor Netty 的 customizer 顺序，仍然可以直接使用 `XtreamServerBuilder`。
 
 ## 5. 测试
 

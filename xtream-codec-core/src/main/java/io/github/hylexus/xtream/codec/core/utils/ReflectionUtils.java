@@ -22,16 +22,92 @@ import org.springframework.core.annotation.MergedAnnotation;
 import org.springframework.core.annotation.MergedAnnotations;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.AnnotatedElement;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
+import java.lang.reflect.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 public final class ReflectionUtils {
     private ReflectionUtils() {
         throw new UnsupportedOperationException();
+    }
+
+    /**
+     * 将反射方法格式化为便于日志阅读的形式。
+     *
+     * @param method 待格式化的方法
+     * @return 格式化后的方法描述
+     * @since 0.7.0
+     */
+    public static String formatMethod(Method method) {
+        Objects.requireNonNull(method, "method");
+
+        final StringBuilder result = new StringBuilder();
+        final String modifiers = Modifier.toString(method.getModifiers());
+        if (!modifiers.isEmpty()) {
+            result.append(modifiers).append(' ');
+        }
+
+        result.append(formatType(method.getGenericReturnType()))
+                .append(' ')
+                .append(method.getDeclaringClass().getSimpleName())
+                .append('#')
+                .append(method.getName())
+                .append('(');
+
+        final Type[] parameterTypes = method.getGenericParameterTypes();
+        for (int i = 0; i < parameterTypes.length; i++) {
+            if (i > 0) {
+                result.append(',');
+            }
+            result.append(formatType(parameterTypes[i]));
+        }
+        return result.append(')').toString();
+    }
+
+    private static String formatType(Type type) {
+        switch (type) {
+            case Class<?> cls -> {
+                if (cls.isArray()) {
+                    return formatType(Objects.requireNonNull(cls.getComponentType())) + "[]";
+                }
+                final String simpleName = cls.getSimpleName();
+                return simpleName.isEmpty() ? cls.getName() : simpleName;
+            }
+            case ParameterizedType parameterizedType -> {
+                final StringBuilder result = new StringBuilder(formatType(parameterizedType.getRawType())).append('<');
+                final Type[] actualTypeArguments = parameterizedType.getActualTypeArguments();
+                for (int i = 0; i < actualTypeArguments.length; i++) {
+                    if (i > 0) {
+                        result.append(',');
+                    }
+                    result.append(formatType(actualTypeArguments[i]));
+                }
+                return result.append('>').toString();
+            }
+            case GenericArrayType genericArrayType -> {
+                return formatType(genericArrayType.getGenericComponentType()) + "[]";
+            }
+            case WildcardType wildcardType -> {
+                final Type[] lowerBounds = wildcardType.getLowerBounds();
+                if (lowerBounds.length > 0) {
+                    return "? super " + formatType(lowerBounds[0]);
+                }
+
+                final Type[] upperBounds = wildcardType.getUpperBounds();
+                if (upperBounds.length == 0 || upperBounds[0].equals(Object.class)) {
+                    return "?";
+                }
+                return "? extends " + formatType(upperBounds[0]);
+            }
+            case TypeVariable<?> typeVariable -> {
+                return typeVariable.getName();
+            }
+            default -> {
+            }
+        }
+        return type.getTypeName();
     }
 
     public static List<XtreamField> findXtreamFieldAnnotations(Field field) {

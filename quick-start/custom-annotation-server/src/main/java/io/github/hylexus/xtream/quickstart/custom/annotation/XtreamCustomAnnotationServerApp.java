@@ -17,10 +17,10 @@
 package io.github.hylexus.xtream.quickstart.custom.annotation;
 
 import io.github.hylexus.xtream.codec.core.EntityCodec;
-import io.github.hylexus.xtream.codec.server.reactive.spec.XtreamNettyHandlerAdapter;
+import io.github.hylexus.xtream.codec.server.reactive.spec.XtreamSchedulerRegistry;
+import io.github.hylexus.xtream.codec.server.reactive.spec.XtreamServers;
 import io.github.hylexus.xtream.codec.server.reactive.spec.handler.builtin.LoggingXtreamRequestExceptionHandler;
 import io.github.hylexus.xtream.codec.server.reactive.spec.impl.LoggingXtreamFilter;
-import io.github.hylexus.xtream.codec.server.reactive.spec.impl.XtreamServerBuilder;
 import io.github.hylexus.xtream.codec.server.reactive.spec.resources.DefaultXtreamSchedulerRegistry;
 import io.github.hylexus.xtream.quickstart.custom.annotation.handler.DemoMessageHandlerMapping;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
@@ -57,7 +57,7 @@ import reactor.core.scheduler.Schedulers;
 /// 3. **business 调度器**：用于设备注册等耗时操作，线程池大小(4)可根据实际场景调整。其他处理器使用默认的并行调度器。
 /// 4. **包扫描路径**：`DemoMessageHandlerMapping` 构造参数 `"io.github.hylexus.xtream.quickstart.custom.annotation"` 必须包含 handler 所在的包。
 /// 5. **ResourceLeakDetector**：Netty 资源泄漏检测仅用于调试，生产环境建议注释掉相关代码。
-/// 6. **bodyLength 计算**：发送请求时需正确计算消息体长度写入报文头偏移 5-6，否则 LengthFieldBasedFrameDecoder 会解码错误。
+/// 6. **bodyLength**：编码响应时由 `@EncodedLength` 自动回填；发送请求时仍需正确填写报文头偏移 5-6，否则 LengthFieldBasedFrameDecoder 会解码错误。
 /// 7. **测试建议**：先用 `nc` 或类似的工具发送 hex 报文验证基本流程，再集成到业务系统。
 ///
 /// ## 测试方式（nc）
@@ -94,50 +94,38 @@ public class XtreamCustomAnnotationServerApp {
         // 如果你不了解 ResourceLeakDetector 是做什么的，请务必注释掉下面这行代码
         // io.netty.util.ResourceLeakDetector.setLevel(io.netty.util.ResourceLeakDetector.Level.PARANOID);
 
-        XtreamServerBuilder.newTcpServerBuilder()
-                .addServerCustomizer(server -> server
-                        .host("0.0.0.0")
-                        .port(9527)
-                        .doOnConnection(conn -> log.info("New connection: {}", conn))
-                        .doOnChannelInit((observer, channel, remoteAddress) -> {
-                            log.info("Channel init: {}", channel);
-                            channel.pipeline().addFirst(
-                                    // bodyLength 在报文头偏移 5 处，长度 2 字节
-                                    new LengthFieldBasedFrameDecoder(
-                                            1024,   // maxFrameLength
-                                            5,      // lengthFieldOffset: magic(4) + msgType(1)
-                                            2,      // lengthFieldLength: bodyLength 占 2 字节
-                                            0,      // lengthAdjustment
-                                            0       // initialBytesToStrip
-                                    )
-                            );
-                        })
-                )
-                .addServerCustomizer(server -> {
-                    // 创建自定义调度器注册表，注册一个名为 "business" 的自定义调度器
-                    final DefaultXtreamSchedulerRegistry schedulerRegistry = new DefaultXtreamSchedulerRegistry(
-                            Schedulers.parallel(),
-                            Schedulers.boundedElastic(),
-                            Schedulers.boundedElastic()
-                    );
-                    schedulerRegistry.registerScheduler("business",
-                            Schedulers.newBoundedElastic(4, 100, "business"));
+        final XtreamSchedulerRegistry schedulerRegistry = new DefaultXtreamSchedulerRegistry(
+                Schedulers.parallel(),
+                Schedulers.boundedElastic(),
+                Schedulers.boundedElastic()
+        );
+        schedulerRegistry.registerScheduler("business", Schedulers.newBoundedElastic(4, 100, "business"));
 
-                    return server.handle(
-                            XtreamNettyHandlerAdapter.newTcpBuilder()
-                                    .addHandlerMappings(new DemoMessageHandlerMapping(
-                                            new String[]{"io.github.hylexus.xtream.quickstart.custom.annotation"},
-                                            cls -> io.github.hylexus.xtream.codec.core.utils.BeanUtils.createNewInstance(cls, new Object[0]),
-                                            schedulerRegistry
-                                    ))
-                                    .enableBuiltinHandlerAdapters(EntityCodec.DEFAULT)
-                                    .enableBuiltinHandlerResultHandlers(EntityCodec.DEFAULT)
-                                    .addFilter(new LoggingXtreamFilter())
-                                    .addExceptionHandler(new LoggingXtreamRequestExceptionHandler())
-                                    .build()
-                    );
-                })
-                .build("custom-annotation-server")
+        XtreamServers.tcp()
+                .name("custom-annotation-server")
+                .bind("0.0.0.0", 9527)
+                .customize(server -> server.doOnConnection(conn -> log.info("New connection: {}", conn)))
+                .pipeline(pipeline -> pipeline.addFirst(
+                        // bodyLength 在报文头偏移 5 处，长度 2 字节
+                        new LengthFieldBasedFrameDecoder(
+                                1024,   // maxFrameLength
+                                5,      // lengthFieldOffset: magic(4) + msgType(1)
+                                2,      // lengthFieldLength: bodyLength 占 2 字节
+                                0,      // lengthAdjustment
+                                0       // initialBytesToStrip
+                        )
+                ))
+                .dispatch(dispatcher -> dispatcher
+                        .addHandlerMappings(new DemoMessageHandlerMapping(
+                                new String[]{"io.github.hylexus.xtream.quickstart.custom.annotation"},
+                                cls -> io.github.hylexus.xtream.codec.core.utils.BeanUtils.createNewInstance(cls, new Object[0]),
+                                schedulerRegistry
+                        ))
+                        .enableBuiltinHandlers(EntityCodec.DEFAULT)
+                        .addFilter(new LoggingXtreamFilter())
+                        .addExceptionHandler(new LoggingXtreamRequestExceptionHandler())
+                )
+                .build()
                 .start();
     }
 }

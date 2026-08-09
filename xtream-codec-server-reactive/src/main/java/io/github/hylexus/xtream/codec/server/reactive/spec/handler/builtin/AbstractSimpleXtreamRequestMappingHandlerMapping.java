@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 
+import static io.github.hylexus.xtream.codec.core.utils.ReflectionUtils.formatMethod;
 import static java.util.Objects.requireNonNull;
 
 /**
@@ -77,7 +78,7 @@ public abstract class AbstractSimpleXtreamRequestMappingHandlerMapping extends A
             ReflectionUtils.doWithMethods(
                     cls,
                     method -> {
-                        log.info(method.getName());
+                        log.info("[XtreamRequestHandler]: {}", formatMethod(method));
                         final XtreamRequestHandlerMapping mappingAnnotation = requireNonNull(AnnotatedElementUtils.getMergedAnnotation(method, XtreamRequestHandlerMapping.class));
                         final Object containerInstance = instanceFactory.apply(cls);
 

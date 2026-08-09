@@ -16,6 +16,7 @@
 
 package io.github.hylexus.xtream.quickstart.custom.annotation.entity;
 
+import io.github.hylexus.xtream.codec.core.annotation.EncodedLength;
 import io.github.hylexus.xtream.codec.core.type.Preset;
 import lombok.Getter;
 import lombok.Setter;
@@ -47,6 +48,8 @@ public abstract class AbstractEntity {
 
     /// 消息体长度，u16 big-endian
     @Preset.RustStyle.u16(order = -100)
+    // 从 bodyLength 的下一个字段开始，直到所有字段编码完成之后，将实际编码的长度回填到 bodyLength 字段中
+    @EncodedLength
     protected int bodyLength;
     // endregion
 

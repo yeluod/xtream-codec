@@ -56,7 +56,5 @@ public class ServerTimeResponse extends AbstractEntity {
     public ServerTimeResponse(LocalDateTime serverTime) {
         this();
         this.serverTime = serverTime;
-        // BCD 时间固定 6 字节
-        this.bodyLength = 6;
     }
 }

@@ -65,7 +65,5 @@ public class RegisterAckResponse extends AbstractEntity {
         this();
         this.result = result;
         this.replyMsg = replyMsg;
-        // body = result(1) + replyMsgLen(1) + replyMsg(N)
-        this.bodyLength = 1 + 1 + replyMsg.length();
     }
 }

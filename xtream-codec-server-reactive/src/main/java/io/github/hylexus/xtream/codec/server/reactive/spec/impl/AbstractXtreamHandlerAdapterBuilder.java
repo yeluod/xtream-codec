@@ -91,9 +91,7 @@ public abstract class AbstractXtreamHandlerAdapterBuilder<C extends AbstractXtre
     }
 
     public C enableBuiltinHandlerAdapters(XtreamHandlerMethodArgumentResolver argumentResolver) {
-        // todo 优化
         this.addHandlerAdapter(new XtreamHandlerMethodHandlerAdapter(argumentResolver));
-
         this.addHandlerAdapter(new SimpleXtreamRequestHandlerHandlerAdapter());
         return self();
     }
