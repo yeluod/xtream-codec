@@ -26,7 +26,6 @@ import io.github.hylexus.xtream.codec.ext.jt808.extensions.handler.Jt808RequestH
 import io.github.hylexus.xtream.codec.ext.jt808.extensions.handler.Jt808ResponseBody;
 import io.github.hylexus.xtream.codec.ext.jt808.spec.Jt808ProtocolVersion;
 import io.github.hylexus.xtream.codec.ext.jt808.spec.Jt808Request;
-import io.github.hylexus.xtream.codec.ext.jt808.spec.Jt808SessionManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -40,11 +39,9 @@ import reactor.core.publisher.Mono;
 public class DemoJt808RequestHandler {
 
     private static final Logger log = LoggerFactory.getLogger(DemoJt808RequestHandler.class);
-    private final Jt808SessionManager jt808SessionManager;
     private final Jt808CommandSender commandSender;
 
-    public DemoJt808RequestHandler(Jt808SessionManager jt808SessionManager, Jt808CommandSender commandSender) {
-        this.jt808SessionManager = jt808SessionManager;
+    public DemoJt808RequestHandler(Jt808CommandSender commandSender) {
         this.commandSender = commandSender;
     }
 

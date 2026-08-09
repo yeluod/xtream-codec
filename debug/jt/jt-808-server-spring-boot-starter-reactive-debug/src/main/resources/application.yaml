@@ -27,7 +27,7 @@ demo-app-config:
   attachment-server:
     # 附件服务器的IP
     # 应该是一个公网IP(设备能访问的IP)
-    server-ip: 192.168.71.54
+    server-ip: 192.168.71.229
     temporary-path: /tmp/jt-808/attachment
 
 ########################################################

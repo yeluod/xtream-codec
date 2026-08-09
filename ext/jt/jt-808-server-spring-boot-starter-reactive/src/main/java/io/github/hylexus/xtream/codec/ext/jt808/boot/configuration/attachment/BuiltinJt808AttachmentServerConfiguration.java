@@ -16,6 +16,7 @@
 
 package io.github.hylexus.xtream.codec.ext.jt808.boot.configuration.attachment;
 
+import io.github.hylexus.xtream.codec.ext.jt808.boot.condition.ConditionalOnJt808Server;
 import io.github.hylexus.xtream.codec.ext.jt808.boot.properties.XtreamJt808ServerProperties;
 import io.github.hylexus.xtream.codec.ext.jt808.spec.Jt808AttachmentSessionManager;
 import io.github.hylexus.xtream.codec.ext.jt808.spec.Jt808SessionEventListener;
@@ -24,7 +25,6 @@ import io.github.hylexus.xtream.codec.server.reactive.spec.XtreamSessionIdGenera
 import io.github.hylexus.xtream.codec.server.reactive.spec.domain.values.UdpSessionIdleStateCheckerProps;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -33,7 +33,7 @@ import org.springframework.context.annotation.Import;
         BuiltinJt808AttachmentServerTcpConfiguration.class,
         BuiltinJt808AttachmentServerUdpConfiguration.class,
 })
-@ConditionalOnExpression("${jt808-server.attachment-server.tcp-server.enabled:true} || ${jt808-server.attachment-server.udp-server.enabled:true}")
+@ConditionalOnJt808Server(serverType = ConditionalOnJt808Server.ServerType.ATTACHMENT_SERVER, protocolType = ConditionalOnJt808Server.ProtocolType.ANY)
 public class BuiltinJt808AttachmentServerConfiguration {
 
     @Bean(destroyMethod = "shutdown")

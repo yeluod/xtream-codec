@@ -24,6 +24,7 @@ import io.github.hylexus.xtream.codec.ext.jt808.codec.Jt808RequestDecoder;
 import io.github.hylexus.xtream.codec.ext.jt808.codec.Jt808RequestLifecycleListener;
 import io.github.hylexus.xtream.codec.ext.jt808.codec.Jt808UdpDatagramPackageSplitter;
 import io.github.hylexus.xtream.codec.ext.jt808.spec.Jt808SessionManager;
+import io.github.hylexus.xtream.codec.ext.jt808.spec.Jt808Servers;
 import io.github.hylexus.xtream.codec.ext.jt808.utils.Jt808InstructionServerUdpHandlerAdapterBuilder;
 import io.github.hylexus.xtream.codec.server.reactive.spec.UdpXtreamNettyHandlerAdapter;
 import io.github.hylexus.xtream.codec.server.reactive.spec.XtreamFilter;
@@ -31,13 +32,11 @@ import io.github.hylexus.xtream.codec.server.reactive.spec.handler.XtreamHandler
 import io.github.hylexus.xtream.codec.server.reactive.spec.handler.XtreamHandlerMapping;
 import io.github.hylexus.xtream.codec.server.reactive.spec.handler.XtreamHandlerResultHandler;
 import io.github.hylexus.xtream.codec.server.reactive.spec.handler.XtreamRequestExceptionHandler;
-import io.github.hylexus.xtream.codec.server.reactive.spec.impl.XtreamServerBuilder;
 import io.github.hylexus.xtream.codec.server.reactive.spec.impl.udp.UdpNettyServerCustomizer;
 import io.github.hylexus.xtream.codec.server.reactive.spec.impl.udp.UdpXtreamServer;
 import io.github.hylexus.xtream.codec.server.reactive.spec.resources.DefaultUdpXtreamNettyResourceFactory;
 import io.github.hylexus.xtream.codec.server.reactive.spec.resources.UdpXtreamNettyResourceFactory;
 import io.github.hylexus.xtream.codec.server.reactive.spec.resources.XtreamNettyResourceFactory;
-import io.github.hylexus.xtream.codec.server.reactive.utils.BuiltinConfigurationUtils;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -104,16 +103,12 @@ public class BuiltinJt808InstructionServerUdpConfiguration {
             ObjectProvider<UdpNettyServerCustomizer> customizers,
             XtreamJt808ServerProperties serverProperties) {
         final XtreamJt808ServerProperties.UdpServerProps udpServer = serverProperties.getInstructionServer().getUdpServer();
-        return XtreamServerBuilder.newUdpServerBuilder()
-                // 默认 host和 port(用户自定义配置可以再次覆盖默认配置)
-                .addServerCustomizer(BuiltinConfigurationUtils.defaultUdpBasicConfigurer(udpServer.getHost(), udpServer.getPort()))
-                // handler
-                .addServerCustomizer(server -> server.handle(udpXtreamNettyHandlerAdapter))
-                // loopResources
-                .addServerCustomizer(server -> server.runOn(resourceFactory.loopResources(), resourceFactory.preferNative()))
-                // 用户自定义配置
-                .addServerCustomizers(customizers.stream().toList())
-                .build("JT/T-808-INSTRUCTION");
+        return Jt808Servers.instructionUdp()
+                .bind(udpServer.getHost(), udpServer.getPort())
+                .handlerAdapter(udpXtreamNettyHandlerAdapter)
+                .resourceFactory(resourceFactory)
+                .customizers(customizers.stream().toList())
+                .build();
     }
 
 }

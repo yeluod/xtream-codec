@@ -17,6 +17,7 @@
 package io.github.hylexus.xtream.codec.ext.jt808.boot.configuration.instruction;
 
 import io.github.hylexus.xtream.codec.common.utils.BufferFactoryHolder;
+import io.github.hylexus.xtream.codec.ext.jt808.boot.condition.ConditionalOnJt808Server;
 import io.github.hylexus.xtream.codec.ext.jt808.boot.properties.XtreamJt808ServerProperties;
 import io.github.hylexus.xtream.codec.ext.jt808.codec.Jt808RequestLifecycleListener;
 import io.github.hylexus.xtream.codec.ext.jt808.codec.Jt808ResponseEncoder;
@@ -30,7 +31,6 @@ import io.github.hylexus.xtream.codec.server.reactive.spec.XtreamSessionIdGenera
 import io.github.hylexus.xtream.codec.server.reactive.spec.domain.values.UdpSessionIdleStateCheckerProps;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -39,7 +39,7 @@ import org.springframework.context.annotation.Import;
         BuiltinJt808InstructionServerTcpConfiguration.class,
         BuiltinJt808InstructionServerUdpConfiguration.class,
 })
-@ConditionalOnExpression("${jt808-server.instruction-server.tcp-server.enabled:true} || ${jt808-server.instruction-server.udp-server.enabled:true}")
+@ConditionalOnJt808Server(serverType = ConditionalOnJt808Server.ServerType.INSTRUCTION_SERVER, protocolType = ConditionalOnJt808Server.ProtocolType.ANY)
 public class BuiltinJt808InstructionServerConfiguration {
 
     @Bean(destroyMethod = "shutdown")

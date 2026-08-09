@@ -24,16 +24,15 @@ import io.github.hylexus.xtream.codec.ext.jt1078.pubsub.Jt1078RequestPublisher;
 import io.github.hylexus.xtream.codec.ext.jt1078.spec.Jt1078RequestHandler;
 import io.github.hylexus.xtream.codec.ext.jt1078.spec.Jt1078SessionManager;
 import io.github.hylexus.xtream.codec.ext.jt1078.spec.Jt1078SimConverter;
+import io.github.hylexus.xtream.codec.ext.jt1078.spec.Jt1078Servers;
 import io.github.hylexus.xtream.codec.ext.jt1078.spec.impl.DefaultJt1078RequestHandler;
 import io.github.hylexus.xtream.codec.ext.jt1078.spec.resources.Jt1078XtreamSchedulerRegistry;
 import io.github.hylexus.xtream.codec.server.reactive.spec.UdpXtreamNettyHandlerAdapter;
-import io.github.hylexus.xtream.codec.server.reactive.spec.impl.XtreamServerBuilder;
 import io.github.hylexus.xtream.codec.server.reactive.spec.impl.udp.UdpNettyServerCustomizer;
 import io.github.hylexus.xtream.codec.server.reactive.spec.impl.udp.UdpXtreamServer;
 import io.github.hylexus.xtream.codec.server.reactive.spec.resources.DefaultUdpXtreamNettyResourceFactory;
 import io.github.hylexus.xtream.codec.server.reactive.spec.resources.UdpXtreamNettyResourceFactory;
 import io.github.hylexus.xtream.codec.server.reactive.spec.resources.XtreamNettyResourceFactory;
-import io.github.hylexus.xtream.codec.server.reactive.utils.BuiltinConfigurationUtils;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -88,16 +87,12 @@ public class BuiltinJt1078ServerUdpConfiguration {
             Jt1078SessionManager sessionManager,
             XtreamJt1078ServerProperties serverProperties) {
         final XtreamJt1078ServerProperties.UdpServerProps udpServer = serverProperties.getUdpServer();
-        return XtreamServerBuilder.newUdpServerBuilder()
-                // 默认 host和 port(用户自定义配置可以再次覆盖默认配置)
-                .addServerCustomizer(BuiltinConfigurationUtils.defaultUdpBasicConfigurer(udpServer.getHost(), udpServer.getPort()))
-                // handler
-                .addServerCustomizer(server -> server.handle(nettyHandlerAdapter))
-                // loopResources
-                .addServerCustomizer(server -> server.runOn(resourceFactory.loopResources(), resourceFactory.preferNative()))
-                // 用户自定义配置
-                .addServerCustomizers(customizers.stream().toList())
-                .build("JT/T-1078");
+        return Jt1078Servers.udp()
+                .bind(udpServer.getHost(), udpServer.getPort())
+                .handlerAdapter(nettyHandlerAdapter)
+                .resourceFactory(resourceFactory)
+                .customizers(customizers.stream().toList())
+                .build();
 
     }
 }

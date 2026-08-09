@@ -27,6 +27,7 @@ import io.github.hylexus.xtream.codec.ext.jt808.extensions.handler.Jt808Response
 import io.github.hylexus.xtream.codec.ext.jt808.spec.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -40,7 +41,7 @@ public class Jt808QuickStartRequestHandler {
     private static final Logger log = LoggerFactory.getLogger(Jt808QuickStartRequestHandler.class);
     private final Jt808CommandSender commandSender;
 
-    public Jt808QuickStartRequestHandler(Jt808CommandSender commandSender) {
+    public Jt808QuickStartRequestHandler(@Autowired(required = false) Jt808CommandSender commandSender) {
         this.commandSender = commandSender;
     }
 
