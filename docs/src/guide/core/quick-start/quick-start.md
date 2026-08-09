@@ -22,7 +22,7 @@ tag:
 <dependency>
     <groupId>io.github.hylexus.xtream</groupId>
     <artifactId>xtream-codec-core</artifactId>
-    <version>0.7.0</version>
+    <version>0.8.0</version>
 </dependency>
 ```
 
@@ -30,7 +30,7 @@ tag:
 
 ```groovy
 
-api("io.github.hylexus.xtream:xtream-codec-core:0.7.0")
+api("io.github.hylexus.xtream:xtream-codec-core:0.8.0")
 ```
 
 :::

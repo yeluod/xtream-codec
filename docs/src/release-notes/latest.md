@@ -5,6 +5,28 @@ article: false
 
 # Latest
 
+## 0.8.0 (2026-08-09)
+
+### 📔 Documentation
+
+- 更新自定义注解示例文档，改为直接引用后端源码，避免文档示例与实现分叉
+- 补充 `@ReferencedByDocs` 关联，方便从源码快速定位对应文档页面
+
+### ⭐ New Features
+
+- 新增协议无关的通用 Server Builder，用于私有协议或未知协议场景
+- 新增 JT/T 808 协议专用 Server Builder，覆盖指令/附件的 TCP 与 UDP 构建
+- 新增 JT/T 1078 协议专用 Server Builder，覆盖音视频 TCP 与 UDP 构建
+
+### 🐞 Bug Fixes
+
+- 修复服务器启动监听器重复初始化时可能无法启动 Netty Server 的问题
+
+### ❤️ Contributors
+
+- [OpenAI Codex](https://openai.com/codex/)
+- [@hylexus](https://github.com/hylexus)
+
 ## 0.7.0 (2026-08-08)
 
 ### 📔 Documentation
