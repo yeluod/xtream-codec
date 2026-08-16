@@ -4,13 +4,15 @@ import { CodecTraceView } from "@/types";
 
 export const TraceResultsPanel = ({
   result,
+  traceTitle,
   traces,
 }: {
   result?: unknown;
+  traceTitle?: string;
   traces: CodecTraceView[];
 }) => {
   if (traces.length === 0) {
-    return <TracePanel result={result} />;
+    return <TracePanel result={result} traceTitle={traceTitle} />;
   }
 
   return (
@@ -24,6 +26,7 @@ export const TraceResultsPanel = ({
           result={index === 0 ? result : undefined}
           showRawResult={index === 0}
           trace={trace}
+          traceTitle={traceTitle}
         />
       ))}
     </div>

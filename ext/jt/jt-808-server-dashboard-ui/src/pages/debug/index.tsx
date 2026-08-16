@@ -111,6 +111,9 @@ export const DebugPage = () => {
   const selectedEntityLabel = selectedEntity
     ? getEntityOptionLabel(selectedEntity)
     : "";
+  const traceTitle = [selectedEntityLabel, selectedEntity?.desc]
+    .filter(Boolean)
+    .join(" · ");
   const isEntitySearching = entityQuery !== selectedEntityLabel;
 
   const visibleEntityOptions = useMemo(() => {
@@ -328,7 +331,11 @@ export const DebugPage = () => {
           </div>
         ) : null}
 
-        <TraceResultsPanel result={result} traces={traces} />
+        <TraceResultsPanel
+          result={result}
+          traces={traces}
+          traceTitle={traceTitle}
+        />
       </div>
     </PageSection>
   );
