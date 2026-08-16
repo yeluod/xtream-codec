@@ -1,4 +1,4 @@
-import { Chip } from "@heroui/react";
+import { Button, Chip, Tooltip } from "@heroui/react";
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -15,6 +15,7 @@ import { RawResultPanel } from "./raw-result-panel";
 import { TraceInspector } from "./trace-inspector";
 import { TraceNodeView } from "./trace-node-view";
 
+import { LuCloneIcon } from "@/components/icons.tsx";
 import { CodecTraceNode, CodecTraceView } from "@/types";
 
 const TraceStat = ({
@@ -56,11 +57,15 @@ export const TracePanel = ({
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
   const [traceScrollTarget, setTraceScrollTarget] = useState<{
     nodeId: string;
     serial: number;
   }>();
   const traceTreeRef = useRef<HTMLDivElement>(null);
+  const copyResetTimerRef = useRef<number | undefined>(undefined);
   const nodes = trace?.nodes ?? [];
   const nodeMap = useMemo(() => {
     return new Map(nodes.map((node) => [node.id, node]));
@@ -76,7 +81,16 @@ export const TracePanel = ({
     setSelectedByteOffset(undefined);
     setCollapsedNodeIds(new Set());
     setTraceScrollTarget(undefined);
+    setCopyState("idle");
   }, [trace?.root?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimerRef.current != null) {
+        window.clearTimeout(copyResetTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!traceScrollTarget) {
@@ -192,6 +206,48 @@ export const TracePanel = ({
     }
   };
 
+  const writeTextToClipboard = async (value: string) => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+
+      return;
+    }
+
+    const textArea = document.createElement("textarea");
+
+    textArea.value = value;
+    textArea.style.position = "fixed";
+    textArea.style.inset = "0";
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textArea);
+  };
+
+  const copyPayloadHex = async () => {
+    const payloadHex = trace?.payloadHex?.trim();
+
+    if (!payloadHex) {
+      return;
+    }
+
+    try {
+      await writeTextToClipboard(`7e${payloadHex}7e`);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+
+    if (copyResetTimerRef.current != null) {
+      window.clearTimeout(copyResetTimerRef.current);
+    }
+    copyResetTimerRef.current = window.setTimeout(() => {
+      setCopyState("idle");
+    }, 1400);
+  };
+
   if (!trace) {
     return (
       <section className="overflow-hidden rounded-2xl border border-border/70 bg-background/80 shadow-[0_10px_30px_-24px_rgb(0_0_0/0.6)]">
@@ -290,6 +346,25 @@ export const TracePanel = ({
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Tooltip>
+                <Tooltip.Trigger>
+                  <Button
+                    className="h-8 px-2.5 font-medium"
+                    isDisabled={payloadBytes.length === 0}
+                    size="sm"
+                    variant="secondary"
+                    onPress={copyPayloadHex}
+                  >
+                    <LuCloneIcon size={14} />
+                    {copyState === "copied"
+                      ? "已复制"
+                      : copyState === "failed"
+                        ? "复制失败"
+                        : "复制报文"}
+                  </Button>
+                </Tooltip.Trigger>
+                <Tooltip.Content>复制完整 Payload HEX</Tooltip.Content>
+              </Tooltip>
               <button
                 aria-checked={autoScrollTraceTree}
                 className={clsx(

@@ -18,7 +18,7 @@ import {
 
 import { DebugNumberField } from "./debug-number-field";
 
-import { LuChevronDownIcon } from "@/components/icons.tsx";
+import { LuChevronDownIcon, LuResetIcon } from "@/components/icons.tsx";
 import { JsonEditor } from "@/components/ui/json-editor.tsx";
 import { Segment } from "@/components/ui/segment.tsx";
 import { CodecDebugEntityOption, CodecDebugOptions } from "@/types";
@@ -48,6 +48,7 @@ type DebugFormCardProps = {
   onMaxPackageSizeChange: (value: number) => void;
   onModeChange: (mode: DebugMode) => void;
   onReversedBit15InHeaderChange: (value: number) => void;
+  onResetSample: () => void;
   onRun: () => void;
   onSelectEntity: (item: CodecDebugEntityOption) => void;
   onTerminalIdChange: (value: string) => void;
@@ -78,6 +79,7 @@ export const DebugFormCard = ({
   onMaxPackageSizeChange,
   onModeChange,
   onReversedBit15InHeaderChange,
+  onResetSample,
   onRun,
   onSelectEntity,
   onTerminalIdChange,
@@ -268,7 +270,7 @@ export const DebugFormCard = ({
               <legend className="px-2 text-xs font-medium text-muted">
                 终端与控制
               </legend>
-              <div className="grid gap-3 xl:grid-cols-[150px_minmax(260px,420px)_130px_160px_110px_112px]">
+              <div className="grid gap-3 xl:grid-cols-[150px_minmax(260px,420px)_130px_160px_110px]">
                 <div className="flex min-w-0 flex-col gap-1">
                   <Label className="text-muted">协议版本</Label>
                   <Segment
@@ -311,22 +313,12 @@ export const DebugFormCard = ({
                   value={0}
                   onChange={() => {}}
                 />
-                <div className="flex items-end">
-                  <Button
-                    className="h-11 w-full"
-                    isDisabled={loading}
-                    onPress={onRun}
-                  >
-                    {loading ? <Spinner size="sm" /> : null}
-                    编码
-                  </Button>
-                </div>
               </div>
             </fieldset>
           ) : null}
 
           {mode === "decode" ? (
-            <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_112px]">
+            <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_120px]">
               <div className="flex min-w-0 flex-col gap-1">
                 <Label className="flex items-center gap-2 text-sm text-muted">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500/75" />
@@ -336,14 +328,24 @@ export const DebugFormCard = ({
                   fullWidth
                   className={clsx(
                     formControlClass,
-                    "min-h-24 font-mono text-xs",
+                    "min-h-26 resize-y px-3 py-2.5 font-mono text-[13px] leading-6",
                   )}
+                  spellCheck={false}
                   value={hexString}
                   variant="secondary"
                   onChange={(event) => onHexStringChange(event.target.value)}
                 />
               </div>
-              <div className="flex items-end">
+              <div className="flex flex-col justify-end gap-2">
+                <Button
+                  className="h-11 w-full"
+                  isDisabled={loading || !selectedClass}
+                  variant="secondary"
+                  onPress={onResetSample}
+                >
+                  <LuResetIcon size={14} />
+                  重置示例
+                </Button>
                 <Button
                   className="h-11 w-full"
                   isDisabled={loading}
@@ -355,16 +357,37 @@ export const DebugFormCard = ({
               </div>
             </div>
           ) : (
-            <div className="flex min-w-0 flex-col gap-1">
-              <Label className="flex items-center gap-2 text-sm text-muted">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500/75" />
-                消息体 JSON
-              </Label>
-              <JsonEditor
-                minHeight="6rem"
-                value={bodyJson}
-                onChange={onBodyJsonChange}
-              />
+            <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_120px]">
+              <div className="flex min-w-0 flex-col gap-1">
+                <Label className="flex items-center gap-2 text-sm text-muted">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500/75" />
+                  消息体 JSON
+                </Label>
+                <JsonEditor
+                  minHeight="6rem"
+                  value={bodyJson}
+                  onChange={onBodyJsonChange}
+                />
+              </div>
+              <div className="flex flex-col justify-end gap-2">
+                <Button
+                  className="h-11 w-full"
+                  isDisabled={loading || !selectedClass}
+                  variant="secondary"
+                  onPress={onResetSample}
+                >
+                  <LuResetIcon size={14} />
+                  重置示例
+                </Button>
+                <Button
+                  className="h-11 w-full"
+                  isDisabled={loading}
+                  onPress={onRun}
+                >
+                  {loading ? <Spinner size="sm" /> : null}
+                  编码
+                </Button>
+              </div>
             </div>
           )}
         </div>

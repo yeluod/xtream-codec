@@ -299,6 +299,19 @@ export const formatUtf8 = (values: number[]) => {
   return visible || "-";
 };
 
+export const formatText = (values: number[], encoding: string) => {
+  if (!values.length) return "-";
+
+  try {
+    const text = new TextDecoder(encoding).decode(new Uint8Array(values));
+    const visible = text.replace(/[\u0000-\u001f\u007f-\u009f\ufffd]/g, ".");
+
+    return visible || "-";
+  } catch {
+    return "-";
+  }
+};
+
 export const formatBcd = (values: number[]) => {
   if (!values.length) return "-";
 

@@ -20,6 +20,7 @@ import {
   Monitor,
   Moon,
   Quote,
+  RotateCcw,
   Server,
   Settings,
   Shuffle,
@@ -113,6 +114,9 @@ export const LuShuffleIcon = (props: LucideProps) => (
 );
 export const LuCloneIcon = (props: LucideProps) => (
   <LucideIcon as={Copy} {...props} />
+);
+export const LuResetIcon = (props: LucideProps) => (
+  <LucideIcon as={RotateCcw} {...props} />
 );
 export const LuChartSimpleIcon = (props: LucideProps) => (
   <LucideIcon as={ChartColumnIncreasing} {...props} />

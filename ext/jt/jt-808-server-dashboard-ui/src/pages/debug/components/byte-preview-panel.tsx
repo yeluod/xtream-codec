@@ -6,6 +6,7 @@ import {
   formatAscii,
   formatBcd,
   formatInteger,
+  formatText,
   formatUtf8,
   toByteValues,
 } from "../debug-utils";
@@ -122,6 +123,8 @@ export const BytePreviewPanel = ({
     ["BIN", binary || "-"],
     ["ASCII", formatAscii(values)],
     ["UTF-8", formatUtf8(values)],
+    ["GBK", formatText(values, "gbk")],
+    ["GB2312", formatText(values, "gb2312")],
     ["BCD", formatBcd(values)],
     ["UInt BE", formatInteger(values, "be", false)],
     ["UInt LE", formatInteger(values, "le", false)],

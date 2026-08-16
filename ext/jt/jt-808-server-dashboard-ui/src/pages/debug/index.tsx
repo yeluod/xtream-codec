@@ -194,9 +194,26 @@ export const DebugPage = () => {
     }
   };
 
+  const resetSampleInput = () => {
+    if (!selectedClass) {
+      return;
+    }
+
+    const sampleValue = getSampleValue(mode, selectedClass);
+
+    if (mode === "encode") {
+      setBodyJson(sampleValue);
+    } else {
+      setHexString(sampleValue);
+    }
+
+    updateDraft(mode, selectedClass, sampleValue);
+    setError("");
+  };
+
   const runDecode = async () => {
     const response = await request<DecodeResult>({
-      path: "codec/decode",
+      path: "codec/decode-with-entity",
       method: "POST",
       data: {
         bodyClass: selectedClass,
@@ -298,6 +315,7 @@ export const DebugPage = () => {
           onMaxPackageSizeChange={setMaxPackageSize}
           onModeChange={updateMode}
           onReversedBit15InHeaderChange={setReversedBit15InHeader}
+          onResetSample={resetSampleInput}
           onRun={run}
           onSelectEntity={selectEntity}
           onTerminalIdChange={setTerminalId}
