@@ -21,7 +21,11 @@ import io.github.hylexus.xtream.codec.core.annotation.DerivedField;
 import io.github.hylexus.xtream.codec.core.annotation.EncodedLength;
 import io.github.hylexus.xtream.codec.core.annotation.PrependLengthFieldType;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.type.Preset;
+import io.netty.buffer.ByteBuf;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
@@ -112,6 +116,32 @@ class EncodedLengthCodecTest extends BaseEntityCodecTest {
             assertEquals(source.checkSum, decoded.checkSum);
             assertEquals(18, decoded.bodyLength);
         }, true);
+    }
+
+    @Test
+    void testEncodedLengthTraceUsesFinalBackfilledValue() {
+        final FlatEntity entity = new FlatEntity()
+                .setVersion(1)
+                .setMessageType(128)
+                .setBodyLength(0)
+                .setUsername("hello")
+                .setPassword("world")
+                .setBirthDay(LocalDateTime.of(2025, 1, 15, 10, 30, 0))
+                .setCheckSum(0);
+        final ByteBuf buffer = allocator.buffer();
+        try {
+            final CodecTracker tracker = new CodecTracker();
+            this.entityCodec.encode(XtreamField.ALL_VERSION, entity, buffer, tracker);
+
+            final CodecTraceNode bodyLengthNode = tracker.getTrace().getRoot().getChildren().get(2);
+            assertEquals(CodecTraceNodeKind.LENGTH_FIELD, bodyLengthNode.getKind());
+            assertEquals(18, bodyLengthNode.getValue());
+            assertEquals("0012", bodyLengthNode.getHex());
+            assertEquals(4, bodyLengthNode.getByteStart());
+            assertEquals(6, bodyLengthNode.getByteEnd());
+        } finally {
+            buffer.release();
+        }
     }
 
     // ========== 继承场景（父类 @EncodedLength、子类 body 字段） ==========

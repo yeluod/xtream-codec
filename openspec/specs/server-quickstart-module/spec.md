@@ -1,7 +1,8 @@
 # server-quickstart-module Specification
 
 ## Purpose
-TBD - created by archiving change server-docs-custom-protocol-sample. Update Purpose after archive.
+
+提供一个不依赖 Spring Boot 的 X-IoT Demo TCP 服务端 quick-start，演示协议无关 Server Builder、自定义注解路由和实体编解码。
 ## Requirements
 ### Requirement: 新增 quick-start Gradle module
 
@@ -19,7 +20,7 @@ Module 的 `build.gradle.kts` 依赖：
 
 ### Requirement: 可运行的 TCP 服务端入口
 
-`XtreamDemoServerApp.java` SHALL 包含 `main` 方法，启动 TCP 服务器：
+`XtreamCustomAnnotationServerApp.java` SHALL 包含 `main` 方法，启动 TCP 服务器：
 
 1. 使用协议无关的 `XtreamServers.tcp()` 构建服务端
 2. 注册 `DemoMessageHandlerMapping` 为 HandlerMapping
@@ -30,29 +31,32 @@ Module 的 `build.gradle.kts` 依赖：
 
 #### Scenario: 服务端启动成功
 - **WHEN** 运行 `main` 方法
-- **THEN** 服务端在 9527 端口启动，日志输出 "server started" 信息
+- **THEN** 服务端在 9527 端口启动，日志输出 listening on 信息
 
 #### Scenario: 示例不直接使用低层 Server Builder
-- **WHEN** 阅读 `XtreamDemoServerApp.java` 的服务端启动代码
+- **WHEN** 阅读 `XtreamCustomAnnotationServerApp.java` 的服务端启动代码
 - **THEN** 示例使用 Generic TCP Server Builder 作为主入口，而不是直接使用低层 TCP Server Builder
 
-### Requirement: 包含至少 3 个 Handler 方法
+### Requirement: 包含完整的 Handler 方法
 
-一个 `@DemoMessageHandler` 类中 SHALL 至少包含 3 个 Handler 方法：
+`MyDemoHandler` SHALL 包含以下 6 个 Handler 方法：
 
 | msgType | 方法名 | 参数 | 说明 |
 |---------|--------|------|------|
-| 0x01 | handleHeartbeat | 无参 | 演示最简用法 |
-| 0x11 | handleTemperature | `@DemoBody TemperatureReport report` | 演示 body 参数注入 |
-| 0x81 | handleRegister | `XtreamExchange exchange, @DemoBody DeviceRegisterRequest req` | 演示 exchange 和 body 联合注入 |
+| 0x10 | handleHeartbeat | 无参 | 演示最简用法 |
+| 0x11 | handleTimeQuery | 无参 | 演示时间响应 |
+| 0x12 | handleTemperatureReport | `@XtreamRequestBody TemperatureReport report` | 演示 body 参数注入 |
+| 0x13 | handleMultiSensorReport | `@XtreamRequestBody MultiSensorData report` | 演示多传感器数据注入 |
+| 0x14 | handleDeviceRegister | `XtreamExchange exchange, @XtreamRequestBody DeviceRegisterRequest req` | 演示 exchange 和 body 联合注入 |
+| 0x15 | handleAlarmReport | `@XtreamRequestBody AlarmReport report` | 演示字符串长度字段注入 |
 
 #### Scenario: 心跳 Handler 可被调用
-- **WHEN** 通过端口发送 heartbeat 报文（`12 34 56 78 01 00 00`）
+- **WHEN** 通过端口发送 heartbeat 报文（`12 34 56 78 10 00 00`）
 - **THEN** handleHeartbeat 方法被执行，日志打印心跳记录
 
 #### Scenario: 温湿度 Handler 可被调用
-- **WHEN** 通过端口发送温湿度上报报文
-- **THEN** handleTemperature 方法被执行，TemperatureReport 实体解析正确
+- **WHEN** 通过端口发送温湿度上报报文（msgType=0x12）
+- **THEN** handleTemperatureReport 方法被执行，TemperatureReport 实体解析正确
 
 ### Requirement: 配套文档
 

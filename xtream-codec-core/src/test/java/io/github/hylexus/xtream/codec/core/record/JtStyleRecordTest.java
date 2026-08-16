@@ -23,6 +23,9 @@ import io.github.hylexus.xtream.codec.core.annotation.PrependLengthFieldType;
 import io.github.hylexus.xtream.codec.core.annotation.ext.*;
 import io.github.hylexus.xtream.codec.core.annotation.map.XtreamMapField;
 import io.github.hylexus.xtream.codec.core.impl.codec.StringFieldCodecs;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.type.Preset;
 import io.github.hylexus.xtream.codec.core.type.XtreamDataType;
 import io.netty.buffer.ByteBuf;
@@ -132,6 +135,40 @@ public class JtStyleRecordTest {
             assertEquals(1, buffer.refCnt());
             buffer.release();
         }
+    }
+
+    @Test
+    void testTrackerForSimpleMap() {
+        final EntityCodec entityCodec = EntityCodec.DEFAULT;
+        final ByteBuf buffer = ByteBufAllocator.DEFAULT.buffer();
+        try {
+            final CodecTracker tracker = new CodecTracker();
+            entityCodec.encode(this.createEntity(), buffer, tracker);
+
+            final CodecTraceNode userInfo = tracker.getTrace().getRoot().getChildren().get(1);
+            final CodecTraceNode map = userInfo.getChildren().stream()
+                    .filter(node -> node.getKind() == CodecTraceNodeKind.MAP)
+                    .findFirst()
+                    .orElseThrow();
+            for (final CodecTraceNode entry : map.getChildren()) {
+                final CodecTraceNode key = findMapEntryItem(entry, CodecTracker.MapEntryItemType.KEY);
+                final CodecTraceNode valueLength = findMapEntryItem(entry, CodecTracker.MapEntryItemType.VALUE_LENGTH);
+                final CodecTraceNode value = findMapEntryItem(entry, CodecTracker.MapEntryItemType.VALUE);
+                assertEquals(entry.getByteStart(), key.getByteStart());
+                assertEquals(key.getByteEnd(), valueLength.getByteStart());
+                assertEquals(valueLength.getByteEnd(), value.getByteStart());
+                assertEquals(entry.getByteEnd(), value.getByteEnd());
+            }
+        } finally {
+            buffer.release();
+        }
+    }
+
+    private static CodecTraceNode findMapEntryItem(CodecTraceNode entry, CodecTracker.MapEntryItemType type) {
+        return entry.getChildren().stream()
+                .filter(node -> type.equals(node.getAttributes().get("mapItemType")))
+                .findFirst()
+                .orElseThrow();
     }
 
     private void doCompare(RecordBasedEntityJtStyle sourceEntity, RecordBasedEntityJtStyle decodedEntity) {

@@ -139,3 +139,78 @@ export interface ServerInfo {
 export interface Dic {
   [key: string]: any;
 }
+
+export type CodecTraceDirection = "ENCODE" | "DECODE" | "UNKNOWN";
+
+export type CodecTraceNodeKind =
+  | "ROOT"
+  | "FIELD"
+  | "NESTED_FIELD"
+  | "COLLECTION"
+  | "COLLECTION_ITEM"
+  | "MAP"
+  | "MAP_ENTRY"
+  | "MAP_ENTRY_ITEM"
+  | "LENGTH_FIELD"
+  | "VIRTUAL_ENTITY"
+  | "VIRTUAL_FIELD"
+  | "UNKNOWN";
+
+export type CodecTraceStatus = "STARTED" | "SUCCESS" | "ERROR" | "SKIPPED";
+
+export interface CodecTraceDiagnostic {
+  level: string;
+  message: string;
+  nodeId?: string;
+  byteOffset?: number;
+  code?: string;
+}
+
+export interface CodecTraceNode {
+  id: string;
+  parentId?: string | null;
+  kind: CodecTraceNodeKind;
+  name: string;
+  path?: string | null;
+  javaType?: string | null;
+  codecType?: string | null;
+  value?: unknown;
+  valueSummary?: string | null;
+  byteStart?: number | null;
+  byteEnd?: number | null;
+  hex?: string | null;
+  status: CodecTraceStatus;
+  attributes: Record<string, unknown>;
+  diagnostics: CodecTraceDiagnostic[];
+  children: CodecTraceNode[];
+}
+
+export interface CodecTraceView {
+  direction: CodecTraceDirection;
+  entityClass?: string | null;
+  payloadHex?: string | null;
+  root: CodecTraceNode;
+  nodes: CodecTraceNode[];
+  nodeIdsByByteOffset: Record<string, string[]>;
+  diagnostics: CodecTraceDiagnostic[];
+}
+
+export interface CodecDebugEntityOption {
+  targetClass: string;
+  messageId: number;
+  encryptionType: number;
+  maxPackageSize: number;
+  reversedBit15InHeader: number;
+  desc: string;
+}
+
+export interface CodecDebugOptions {
+  defaultTerminalId: string;
+  classMetadata: CodecDebugEntityOption[];
+}
+
+export interface CodecDebugTracker {
+  rawHexString: string;
+  escapedHexString: string;
+  details: CodecTraceView;
+}

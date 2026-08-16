@@ -135,18 +135,29 @@ public class EntityDecoder {
     public <T> T decodeWithTracker(int version, ByteBuf source, BeanMetadata beanMetadata, Object containerInstance, CodecTracker tracker) {
         Objects.requireNonNull(tracker);
         final int indexBeforeRead = source.readerIndex();
-        if (tracker.getRootSpan().getEntityClass() == null) {
-            tracker.getRootSpan().setEntityClass(beanMetadata.getRawType().getName());
+        final boolean rootInvocation = !tracker.isTracing();
+        if (rootInvocation) {
+            tracker.beginDecode(indexBeforeRead, beanMetadata.getRawType().getName());
         }
         final FieldCodec.DeserializeContext context = new DefaultDeserializeContext(this.bufferFactory, this, containerInstance, version, this.beanMetadataRegistry, tracker);
-        final T result;
-        if (beanMetadata.getRawType().isRecord()) {
-            result = decodeRecord(source, beanMetadata, containerInstance, context, tracker);
-        } else {
-            result = decodePojo(source, beanMetadata, containerInstance, context, tracker);
+        try {
+            final T result;
+            if (beanMetadata.getRawType().isRecord()) {
+                result = decodeRecord(source, beanMetadata, containerInstance, context, tracker);
+            } else {
+                result = decodePojo(source, beanMetadata, containerInstance, context, tracker);
+            }
+            if (rootInvocation) {
+                final String hexString = FormatUtils.toHexString(source, indexBeforeRead, source.readerIndex() - indexBeforeRead);
+                tracker.finishTrace(hexString, source.readerIndex());
+            }
+            return result;
+        } catch (RuntimeException | Error e) {
+            if (rootInvocation) {
+                tracker.recordFailure(e, source.readerIndex());
+            }
+            throw e;
         }
-        tracker.getRootSpan().setHexString(FormatUtils.toHexString(source, indexBeforeRead, source.readerIndex() - indexBeforeRead));
-        return result;
     }
     // endregion withTracker
 

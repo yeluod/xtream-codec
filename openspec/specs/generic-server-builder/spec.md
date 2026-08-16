@@ -46,6 +46,11 @@ The generic server builders SHALL provide a dispatcher setup API that allows use
 - **WHEN** a user configures handler mappings, filters, exception handlers, or session manager through the dispatcher setup API
 - **THEN** those components are used by the server dispatch layer
 
+#### Scenario: Configure dispatch at most once
+- **WHEN** a user calls `dispatch(...)` a second time on the same TCP or UDP server builder
+- **THEN** the builder SHALL reject the call with an `IllegalStateException`
+- **THEN** the builder SHALL retain the dispatcher configured by the first call
+
 ### Requirement: Existing low-level builder compatibility
 
 The system SHALL retain the existing low-level TCP and UDP server builder APIs for advanced customization and compatibility.

@@ -18,7 +18,6 @@ package io.github.hylexus.xtream.codec.ext.jt808.dashboard.domain.values;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.github.hylexus.xtream.codec.core.RuntimeTypeSupplier;
-import io.github.hylexus.xtream.codec.core.tracker.RootSpan;
 import io.github.hylexus.xtream.codec.core.type.Preset;
 import io.github.hylexus.xtream.codec.ext.jt808.spec.Jt808RequestHeader;
 
@@ -35,20 +34,9 @@ public class Jt808DashboardDebugMessage implements RuntimeTypeSupplier {
     @Preset.JtStyle.RuntimeType(lengthExpression = "header.msgBodyLength()", desc = "消息体")
     private Object body;
 
-    private RootSpan bodyDetails;
-
     // 校验码
     @Preset.JtStyle.Byte(desc = "校验码")
     private short checkSum;
-
-    public RootSpan getBodyDetails() {
-        return bodyDetails;
-    }
-
-    public Jt808DashboardDebugMessage setBodyDetails(RootSpan bodyDetails) {
-        this.bodyDetails = bodyDetails;
-        return this;
-    }
 
     public Header getHeader() {
         return header;

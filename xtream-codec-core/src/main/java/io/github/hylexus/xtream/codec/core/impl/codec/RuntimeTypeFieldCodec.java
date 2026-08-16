@@ -25,8 +25,8 @@ import io.github.hylexus.xtream.codec.core.EntityEncoder;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
 import io.github.hylexus.xtream.codec.core.RuntimeTypeSupplier;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
-import io.github.hylexus.xtream.codec.core.tracker.NestedFieldSpan;
 import io.netty.buffer.ByteBuf;
 import org.jspecify.annotations.Nullable;
 import org.springframework.util.ClassUtils;
@@ -87,17 +87,28 @@ public class RuntimeTypeFieldCodec extends AbstractFieldCodec<Object> {
             @SuppressWarnings("unchecked") final FieldCodec<Object> codec = (FieldCodec<Object>) fieldCodec.get();
             return codec.deserializeWithTracker(propertyMetadata, context, input, length);
         } else {
+            final int inputReaderIndexBeforeSlice = input.readerIndex();
             final ByteBuf slice = length < 0
                     ? input // all remaining
                     : input.readSlice(length);
             final BeanMetadata beanMetadata = entityDecoder.getBeanMetadataRegistry().getBeanMetadata(targetClass, context.version());
             final int parentIndexBeforeRead = slice.readerIndex();
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            final NestedFieldSpan nestedFieldSpan = codecTracker.startNewNestedFieldSpan(propertyMetadata, this, targetClass.getTypeName());
+            final CodecTraceNode nestedFieldSpan = codecTracker.startNewNestedFieldSpan(propertyMetadata, this, targetClass.getTypeName());
 
-            final Object value = entityDecoder.decodeWithTracker(beanMetadata, slice, codecTracker);
-
-            nestedFieldSpan.setHexString(FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead));
+            final Object value;
+            if (length < 0) {
+                value = entityDecoder.decodeWithTracker(beanMetadata, slice, codecTracker);
+                codecTracker.updateContainerSpan(nestedFieldSpan, null, FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead), slice.readerIndex());
+            } else {
+                codecTracker.pushCoordinateBase(inputReaderIndexBeforeSlice);
+                try {
+                    value = entityDecoder.decodeWithTracker(beanMetadata, slice, codecTracker);
+                    codecTracker.updateContainerSpan(nestedFieldSpan, null, FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead), slice.readerIndex());
+                } finally {
+                    codecTracker.popCoordinateBase();
+                }
+            }
             codecTracker.finishCurrentSpan();
 
             return value;
@@ -143,12 +154,12 @@ public class RuntimeTypeFieldCodec extends AbstractFieldCodec<Object> {
             codec.serializeWithTracker(propertyMetadata, context, output, value);
         } else {
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            final NestedFieldSpan nestedFieldSpan = codecTracker.startNewNestedFieldSpan(propertyMetadata, this, targetClass.getTypeName());
+            final CodecTraceNode nestedFieldSpan = codecTracker.startNewNestedFieldSpan(propertyMetadata, this, targetClass.getTypeName());
 
             final BeanMetadata beanMetadata = entityEncoder.getBeanMetadataRegistry().getBeanMetadata(targetClass, context.version());
             entityEncoder.encodeWithTracker(beanMetadata, value, output, codecTracker);
 
-            nestedFieldSpan.setHexString(FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite));
+            codecTracker.updateSpan(nestedFieldSpan, null, FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite), parentIndexBeforeWrite, output.writerIndex());
             codecTracker.finishCurrentSpan();
         }
     }

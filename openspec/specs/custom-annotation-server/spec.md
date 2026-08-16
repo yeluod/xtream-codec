@@ -1,7 +1,8 @@
 # custom-annotation-server Specification
 
 ## Purpose
-TBD - created by archiving change server-docs-custom-protocol-sample. Update Purpose after archive.
+
+定义 X-IoT Demo 私有协议示例中的自定义 Handler 注解、消息类型路由和内置参数注入行为。
 ## Requirements
 ### Requirement: @DemoMessageHandler 注解
 
@@ -28,17 +29,17 @@ public @interface DemoMessageHandler {
 @Retention(RetentionPolicy.RUNTIME)
 @XtreamRequestHandlerMapping
 public @interface DemoMessageMapping {
-    byte[] msgType();
+    int[] msgType();
 }
 ```
 
 #### Scenario: 方法被标记为特定消息类型的处理器
-- **WHEN** 一个方法使用 `@DemoMessageMapping(msgType = 0x11)` 注解
-- **THEN** 该方法被注册为 msgType=0x11 消息的处理器
+- **WHEN** 一个方法使用 `@DemoMessageMapping(msgType = {0x12})` 注解
+- **THEN** 该方法被注册为 msgType=0x12 消息的处理器
 
-#### Scenario: 注解属性为字节数组
-- **WHEN** `@DemoMessageMapping` 的 `msgType` 属性为 byte[] 类型
-- **THEN** 可同时指定多个消息类型，如 `msgType = {0x01, 0x02}`
+#### Scenario: 注解属性为整数数组
+- **WHEN** `@DemoMessageMapping` 的 `msgType` 属性为 int[] 类型
+- **THEN** 可同时指定多个消息类型，如 `msgType = {0x12, 0x13}`
 
 ### Requirement: DemoMessageHandlerMapping 分发逻辑
 
@@ -78,7 +79,7 @@ Handler 方法 SHALL 支持以下内置参数类型：
 - `XtreamResponse response`
 - `XtreamSession session`
 - `ByteBuf payload`
-- `@DemoBody` 注解标记的消息体实体（框架的 `@XtreamRequestBody` 别名或直接使用）
+- `@XtreamRequestBody` 注解标记的消息体实体
 
 #### Scenario: 可注入 XtreamExchange 参数
 - **WHEN** Handler 方法声明 `XtreamExchange exchange` 参数
@@ -87,4 +88,3 @@ Handler 方法 SHALL 支持以下内置参数类型：
 #### Scenario: 无参方法
 - **WHEN** Handler 方法不声明任何参数（如心跳处理）
 - **THEN** 方法正常被调用，不报错
-

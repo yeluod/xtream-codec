@@ -30,7 +30,7 @@ public class BuiltinMessage0102V2011 {
     /**
      * 鉴权码 STRING 终端重连后上报鉴权码
      */
-    @Preset.JtStyle.Str
+    @Preset.JtStyle.Str(desc = "鉴权码")
     private String authenticationCode;
 
     public String getAuthenticationCode() {

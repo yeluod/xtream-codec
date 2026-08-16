@@ -27,10 +27,8 @@ import io.github.hylexus.xtream.codec.core.impl.codec.StringFieldCodecs;
 import io.github.hylexus.xtream.codec.core.impl.domain.KeyMeta;
 import io.github.hylexus.xtream.codec.core.impl.domain.ValueMatcherMeta;
 import io.github.hylexus.xtream.codec.core.impl.domain.XtreamPairFieldSequenceMeta;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
-import io.github.hylexus.xtream.codec.core.tracker.CollectionFieldSpan;
-import io.github.hylexus.xtream.codec.core.tracker.CollectionItemSpan;
-import io.github.hylexus.xtream.codec.core.tracker.NestedFieldSpan;
 import io.github.hylexus.xtream.codec.core.type.Pair;
 import io.github.hylexus.xtream.codec.core.type.simple.DataField;
 import io.netty.buffer.ByteBuf;
@@ -98,7 +96,7 @@ public class PairCodecs {
                 return;
             }
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            final CollectionFieldSpan collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(propertyMetadata);
+            final CodecTraceNode collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(propertyMetadata);
             final int parentIndexBeforeWrite = output.writerIndex();
             int sequence = 0;
             for (Pair pair : pairList) {
@@ -106,16 +104,16 @@ public class PairCodecs {
                     continue;
                 }
 
-                final CollectionItemSpan collectionItemSpan = codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getFieldName(), sequence++);
+                final CodecTraceNode collectionItemSpan = codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getName(), sequence++);
                 final int indexBeforeWrite = output.writerIndex();
 
                 encodePairWithTracker(context, output, pair, codecTracker, this.getClass().getSimpleName());
 
-                collectionItemSpan.setHexString(FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite));
+                codecTracker.updateSpan(collectionItemSpan, null, FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), indexBeforeWrite, output.writerIndex());
                 codecTracker.finishCurrentSpan();
             }
 
-            collectionFieldSpan.setHexString(FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite));
+            codecTracker.updateSpan(collectionFieldSpan, null, FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite), parentIndexBeforeWrite, output.writerIndex());
             codecTracker.finishCurrentSpan();
         }
 
@@ -157,6 +155,7 @@ public class PairCodecs {
         public @Nullable Iterable<@Nullable Pair> deserializeWithTracker(BeanPropertyMetadata propertyMetadata, DeserializeContext context, ByteBuf input, int length) {
             final XtreamPairFieldSequenceMeta meta = this.extendMetaRegistry.getXtreamPairFieldSequenceMeta(context.version(), propertyMetadata.field());
             final List<Pair> results = new ArrayList<>();
+            final int inputReaderIndexBeforeSlice = input.readerIndex();
             final ByteBuf slice = length > 0
                     ? input.readSlice(length)
                     : input; // all remaining
@@ -164,41 +163,56 @@ public class PairCodecs {
             final Map<Object, ValueMatcherMeta> valueMatchersByKey = meta.decoder().valueMatchers().valueMatchersByKey();
             int iterationTimes = propertyMetadata.iterationTimesExtractor().extractIterationTimes(context, context.evaluationContext());
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            final CollectionFieldSpan collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(propertyMetadata);
+            if (length > 0) {
+                codecTracker.pushCoordinateBase(inputReaderIndexBeforeSlice);
+            }
+            final CodecTraceNode collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(propertyMetadata);
             int sequence = 0;
-            final int parentIndexBeforeRead = slice.readerIndex();
+            try {
+                final int parentIndexBeforeRead = slice.readerIndex();
 
-            while (slice.isReadable() && iterationTimes-- > 0) {
-                final CollectionItemSpan collectionItemSpan = codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getFieldName(), sequence++);
-                final int indexBeforeRead = slice.readerIndex();
+                while (slice.isReadable() && iterationTimes-- > 0) {
+                    final CodecTraceNode collectionItemSpan = codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getName(), sequence++);
+                    final int indexBeforeRead = slice.readerIndex();
 
-                // 1. key
-                final KeyMeta keyMeta = meta.decoder().key();
-                final DataField.DictKey key = DataField.DictKey.deserializeWithTracker(codecTracker, keyMeta.type(), slice, keyMeta.sizeInBytes(), keyMeta.charset(), "key");
+                    // 1. key
+                    final KeyMeta keyMeta = meta.decoder().key();
+                    final DataField.DictKey key = DataField.DictKey.deserializeWithTracker(codecTracker, keyMeta.type(), slice, keyMeta.sizeInBytes(), keyMeta.charset(), "key");
 
-                // 2. value
-                final ValueMatcherMeta valueMatcherMeta = valueMatchersByKey.get(key.value());
-                codecTracker.updateTempFieldName("value");
-                if (valueMatcherMeta == null) {
-                    final String remainingHex = StringFieldCodecs.INSTANCE_HEX.deserializeWithTracker(propertyMetadata, context, slice, slice.readableBytes());
-                    results.add(new Pair(key, null, remainingHex));
-                    collectionItemSpan.setHexString(FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead));
-                    codecTracker.finishCurrentSpan();
-                    break;
-                } else {
-                    final int valueLength = valueMatcherMeta.length();
-                    final FieldCodec<Object> valueCodec = valueMatcherMeta.valueCodec();
-
-                    final Object value = valueCodec.deserializeWithTracker(propertyMetadata, context, slice.readSlice(valueLength), valueLength);
-                    final Pair pair = new Pair(key, value);
-                    results.add(pair);
-                    collectionItemSpan.setHexString(FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead));
-                    codecTracker.finishCurrentSpan();
+                    // 2. value
+                    final ValueMatcherMeta valueMatcherMeta = valueMatchersByKey.get(key.value());
+                    codecTracker.updateTempFieldName("value");
+                    if (valueMatcherMeta == null) {
+                        final String remainingHex = StringFieldCodecs.INSTANCE_HEX.deserializeWithTracker(propertyMetadata, context, slice, slice.readableBytes());
+                        results.add(new Pair(key, null, remainingHex));
+                        codecTracker.updateContainerSpan(collectionItemSpan, null, FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead), slice.readerIndex());
+                        codecTracker.finishCurrentSpan();
+                        break;
+                    } else {
+                        final int valueLength = valueMatcherMeta.length();
+                        final FieldCodec<Object> valueCodec = valueMatcherMeta.valueCodec();
+                        final int valueIndexBeforeRead = slice.readerIndex();
+                        final ByteBuf valueSlice = slice.readSlice(valueLength);
+                        codecTracker.pushCoordinateBase(valueIndexBeforeRead);
+                        final Object value;
+                        try {
+                            value = valueCodec.deserializeWithTracker(propertyMetadata, context, valueSlice, valueLength);
+                        } finally {
+                            codecTracker.popCoordinateBase();
+                        }
+                        final Pair pair = new Pair(key, value);
+                        results.add(pair);
+                        codecTracker.updateContainerSpan(collectionItemSpan, null, FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead), slice.readerIndex());
+                        codecTracker.finishCurrentSpan();
+                    }
+                }
+                codecTracker.updateContainerSpan(collectionFieldSpan, null, FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead), slice.readerIndex());
+                codecTracker.finishCurrentSpan();
+            } finally {
+                if (length > 0) {
+                    codecTracker.popCoordinateBase();
                 }
             }
-
-            collectionFieldSpan.setHexString(FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead));
-            codecTracker.finishCurrentSpan();
             return results;
         }
     }
@@ -226,11 +240,11 @@ public class PairCodecs {
             codecTracker.updateTempFieldName("value");
             context.entityEncoder().encodeWithTracker(value, output, codecTracker);
         } else {
-            final NestedFieldSpan valueTracker = codecTracker.startNewNestedFieldSpan("value", "", value.getClass().getSimpleName(), fieldCodec);
+            final CodecTraceNode valueTracker = codecTracker.startNewNestedFieldSpan("value", "", value.getClass().getSimpleName(), fieldCodec);
             final int index = output.writerIndex();
             context.entityEncoder().encodeWithTracker(value, output, codecTracker);
 
-            valueTracker.setHexString(FormatUtils.toHexString(output, index, output.writerIndex() - index));
+            codecTracker.updateSpan(valueTracker, null, FormatUtils.toHexString(output, index, output.writerIndex() - index), index, output.writerIndex());
             codecTracker.finishCurrentSpan();
         }
     }

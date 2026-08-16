@@ -38,19 +38,19 @@ public class BuiltinMessage0104 {
     /**
      * 对应的终端参数查询消息的流水号
      */
-    @Preset.JtStyle.Word
+    @Preset.JtStyle.Word(desc = "对应的终端参数查询消息的流水号")
     private int flowId;
 
     /**
      * 应答参数个数
      */
-    @Preset.JtStyle.Byte
+    @Preset.JtStyle.Byte(desc = "应答参数个数")
     private short parameterCount;
 
     /**
      * 参数项列表: 见表 10
      */
-    @Preset.JtStyle.List
+    @Preset.JtStyle.List(desc = "参数项列表")
     private List<ParameterItem> parameterItems;
 
     public int getFlowId() {

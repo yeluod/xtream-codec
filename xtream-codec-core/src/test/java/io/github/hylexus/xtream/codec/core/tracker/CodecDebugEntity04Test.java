@@ -28,7 +28,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class CodecDebugEntity04Test {
 
@@ -57,35 +56,35 @@ public class CodecDebugEntity04Test {
     }
 
     private void doCompare(CodecTracker tracker, CodecDebugEntity04 original) {
-        final RootSpan rootSpan = tracker.getRootSpan();
+        final CodecTraceNode rootSpan = tracker.getTrace().getRoot();
         assertEquals(3, rootSpan.getChildren().size());
 
-        final BaseSpan headerSpan = rootSpan.getChildren().get(0);
-        assertInstanceOf(NestedFieldSpan.class, headerSpan);
+        final CodecTraceNode headerSpan = rootSpan.getChildren().get(0);
+        assertEquals(CodecTraceNodeKind.NESTED_FIELD, headerSpan.getKind());
 
-        final BaseSpan bodySpan = rootSpan.getChildren().get(1);
-        assertInstanceOf(NestedFieldSpan.class, bodySpan);
-        final BaseSpan checkSumSpan = rootSpan.getChildren().get(2);
-        assertInstanceOf(BasicFieldSpan.class, checkSumSpan);
+        final CodecTraceNode bodySpan = rootSpan.getChildren().get(1);
+        assertEquals(CodecTraceNodeKind.NESTED_FIELD, bodySpan.getKind());
+        final CodecTraceNode checkSumSpan = rootSpan.getChildren().get(2);
+        assertEquals(CodecTraceNodeKind.FIELD, checkSumSpan.getKind());
 
-        assertEquals(original.getHeader().getMsgId(), ((BasicFieldSpan) headerSpan.getChildren().get(0)).getValue());
-        assertEquals(original.getHeader().getMsgBodyProps(), ((BasicFieldSpan) headerSpan.getChildren().get(1)).getValue());
-        assertEquals(original.getHeader().getTerminalId(), ((BasicFieldSpan) headerSpan.getChildren().get(2)).getValue());
-        assertEquals(original.getHeader().getMsgSerialNo(), ((BasicFieldSpan) headerSpan.getChildren().get(3)).getValue());
+        assertEquals(original.getHeader().getMsgId(), headerSpan.getChildren().get(0).getValue());
+        assertEquals(original.getHeader().getMsgBodyProps(), headerSpan.getChildren().get(1).getValue());
+        assertEquals(original.getHeader().getTerminalId(), headerSpan.getChildren().get(2).getValue());
+        assertEquals(original.getHeader().getMsgSerialNo(), headerSpan.getChildren().get(3).getValue());
 
         final CodecDebugEntity02 body = (CodecDebugEntity02) original.getBody();
-        assertEquals(body.getAlarmFlag(), ((BasicFieldSpan) bodySpan.getChildren().get(0)).getValue());
-        assertEquals(body.getStatus(), ((BasicFieldSpan) bodySpan.getChildren().get(1)).getValue());
-        assertEquals(body.getLatitude(), ((BasicFieldSpan) bodySpan.getChildren().get(2)).getValue());
-        assertEquals(body.getLongitude(), ((BasicFieldSpan) bodySpan.getChildren().get(3)).getValue());
-        assertEquals(body.getAltitude(), ((BasicFieldSpan) bodySpan.getChildren().get(4)).getValue());
-        assertEquals(body.getSpeed(), ((BasicFieldSpan) bodySpan.getChildren().get(5)).getValue());
-        assertEquals(body.getDirection(), ((BasicFieldSpan) bodySpan.getChildren().get(6)).getValue());
-        assertEquals(body.getTime(), ((BasicFieldSpan) bodySpan.getChildren().get(7)).getValue());
-        assertInstanceOf(MapFieldSpan.class, bodySpan.getChildren().get(8));
+        assertEquals(body.getAlarmFlag(), bodySpan.getChildren().get(0).getValue());
+        assertEquals(body.getStatus(), bodySpan.getChildren().get(1).getValue());
+        assertEquals(body.getLatitude(), bodySpan.getChildren().get(2).getValue());
+        assertEquals(body.getLongitude(), bodySpan.getChildren().get(3).getValue());
+        assertEquals(body.getAltitude(), bodySpan.getChildren().get(4).getValue());
+        assertEquals(body.getSpeed(), bodySpan.getChildren().get(5).getValue());
+        assertEquals(body.getDirection(), bodySpan.getChildren().get(6).getValue());
+        assertEquals(body.getTime(), bodySpan.getChildren().get(7).getValue());
+        assertEquals(CodecTraceNodeKind.MAP, bodySpan.getChildren().get(8).getKind());
         assertEquals(2, bodySpan.getChildren().get(8).getChildren().size());
 
-        assertEquals(original.getCheckSum(), ((BasicFieldSpan) checkSumSpan).getValue());
+        assertEquals(original.getCheckSum(), checkSumSpan.getValue());
     }
 
     private CodecDebugEntity04 createEntity() {

@@ -55,17 +55,18 @@ public class CodecDebugEntity02Test {
     }
 
     private void doCompare(CodecTracker tracker, CodecDebugEntity02 original) {
-        final RootSpan rootSpan = tracker.getRootSpan();
+        final CodecTraceNode rootSpan = tracker.getTrace().getRoot();
         assertEquals(9, rootSpan.getChildren().size());
-        assertEquals(original.getAlarmFlag(), ((BasicFieldSpan) rootSpan.getChildren().get(0)).getValue());
-        assertEquals(original.getStatus(), ((BasicFieldSpan) rootSpan.getChildren().get(1)).getValue());
-        assertEquals(original.getLatitude(), ((BasicFieldSpan) rootSpan.getChildren().get(2)).getValue());
-        assertEquals(original.getLongitude(), ((BasicFieldSpan) rootSpan.getChildren().get(3)).getValue());
-        assertEquals(original.getAltitude(), ((BasicFieldSpan) rootSpan.getChildren().get(4)).getValue());
-        assertEquals(original.getSpeed(), ((BasicFieldSpan) rootSpan.getChildren().get(5)).getValue());
-        assertEquals(original.getDirection(), ((BasicFieldSpan) rootSpan.getChildren().get(6)).getValue());
-        assertEquals(original.getTime(), ((BasicFieldSpan) rootSpan.getChildren().get(7)).getValue());
-        final MapFieldSpan mapFieldSpan = (MapFieldSpan) rootSpan.getChildren().get(8);
+        assertEquals(original.getAlarmFlag(), rootSpan.getChildren().get(0).getValue());
+        assertEquals(original.getStatus(), rootSpan.getChildren().get(1).getValue());
+        assertEquals(original.getLatitude(), rootSpan.getChildren().get(2).getValue());
+        assertEquals(original.getLongitude(), rootSpan.getChildren().get(3).getValue());
+        assertEquals(original.getAltitude(), rootSpan.getChildren().get(4).getValue());
+        assertEquals(original.getSpeed(), rootSpan.getChildren().get(5).getValue());
+        assertEquals(original.getDirection(), rootSpan.getChildren().get(6).getValue());
+        assertEquals(original.getTime(), rootSpan.getChildren().get(7).getValue());
+        final CodecTraceNode mapFieldSpan = rootSpan.getChildren().get(8);
+        assertEquals(CodecTraceNodeKind.MAP, mapFieldSpan.getKind());
         assertEquals(2, mapFieldSpan.getChildren().size());
     }
 

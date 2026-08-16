@@ -45,7 +45,7 @@ export const routeMetaByPath: Record<string, RouteMeta> = {
   },
   "/debug": {
     title: "调试",
-    description: "开发调试工具（暂未开放）",
+    description: "报文编解码调试工具",
   },
 };
 

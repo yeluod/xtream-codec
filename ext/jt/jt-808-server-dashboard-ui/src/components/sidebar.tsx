@@ -111,26 +111,6 @@ export const Sidebar = ({
         <nav aria-label="主导航" className="flex flex-1 flex-col gap-1">
           {sideNavList.map((link) => {
             const Icon = link.icon;
-            const disabled = link.href === "/debug";
-
-            if (disabled) {
-              return (
-                <div
-                  key={link.href}
-                  className={clsx(
-                    "flex cursor-not-allowed items-center gap-3 rounded-2xl px-3 py-2.5 text-sm text-muted opacity-60",
-                    compact ? "justify-center px-2" : "",
-                  )}
-                  title="暂未开放"
-                >
-                  <Icon className="!text-current size-[1.15rem] shrink-0 [&>svg]:block" />
-                  {!compact ? (
-                    <span className="truncate font-medium">{link.name}</span>
-                  ) : null}
-                </div>
-              );
-            }
-
             const isOn = pathMatches(pathname, link.href);
 
             return (

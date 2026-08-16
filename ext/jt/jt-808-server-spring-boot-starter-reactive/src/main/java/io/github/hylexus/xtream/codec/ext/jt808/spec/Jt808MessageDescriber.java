@@ -16,9 +16,7 @@
 
 package io.github.hylexus.xtream.codec.ext.jt808.spec;
 
-import io.github.hylexus.xtream.codec.core.tracker.BaseSpan;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
-import io.github.hylexus.xtream.codec.core.tracker.RootSpan;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceView;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -154,22 +152,27 @@ public class Jt808MessageDescriber {
         for (int i = 0; i < totalPackage; i++) {
             final Tracker tracker = trackers.get(i);
             final int packageNo = i;
-            CodecTracker.visitTracker(0, tracker.getDetails(), (level, span) -> {
-                visitor.visit(packageNo + 1, totalPackage, level, span);
-            });
+            visitTraceNode(0, tracker.getDetails().root(), (level, node) -> visitor.visit(packageNo + 1, totalPackage, level, node));
         }
     }
 
     @FunctionalInterface
     public interface Jt808ResponseEncoderTrackerVisitor {
-        void visit(int currentPackageNo, int totalPackageNo, int level, BaseSpan span);
+        void visit(int currentPackageNo, int totalPackageNo, int level, CodecTraceView.Node node);
+    }
+
+    private static void visitTraceNode(int level, CodecTraceView.Node node, java.util.function.BiConsumer<Integer, CodecTraceView.Node> visitor) {
+        visitor.accept(level, node);
+        for (final CodecTraceView.Node child : node.children()) {
+            visitTraceNode(level + 1, child, visitor);
+        }
     }
 
     @SuppressWarnings("NullAway")
     public static class Tracker {
         private String rawHexString;
         private String escapedHexString;
-        private RootSpan details;
+        private CodecTraceView details;
 
         public Tracker() {
         }
@@ -192,11 +195,11 @@ public class Jt808MessageDescriber {
             return this;
         }
 
-        public RootSpan getDetails() {
+        public CodecTraceView getDetails() {
             return details;
         }
 
-        public Tracker setDetails(RootSpan details) {
+        public Tracker setDetails(CodecTraceView details) {
             this.details = details;
             return this;
         }

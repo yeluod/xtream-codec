@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class CodecDebugEntity01Test {
     EntityCodec entityCodec = EntityCodec.DEFAULT;
@@ -66,19 +65,19 @@ public class CodecDebugEntity01Test {
     }
 
     private void doCompare(CodecTracker tracker, CodecDebugEntity01 entity) {
-        final RootSpan rootSpan = tracker.getRootSpan();
+        final CodecTraceNode rootSpan = tracker.getTrace().getRoot();
         assertEquals(5, rootSpan.getChildren().size());
 
-        for (final BaseSpan span : rootSpan.getChildren()) {
+        for (final CodecTraceNode span : rootSpan.getChildren()) {
             assertEquals(0, span.getChildren().size());
-            assertInstanceOf(BasicFieldSpan.class, span);
+            assertEquals(CodecTraceNodeKind.FIELD, span.getKind());
         }
 
-        assertEquals(entity.getMultimediaType(), ((BasicFieldSpan) rootSpan.getChildren().get(0)).getValue());
-        assertEquals(entity.getChannelId(), ((BasicFieldSpan) rootSpan.getChildren().get(1)).getValue());
-        assertEquals(entity.getEventItemCode(), ((BasicFieldSpan) rootSpan.getChildren().get(2)).getValue());
-        assertEquals(entity.getStartTime(), ((BasicFieldSpan) rootSpan.getChildren().get(3)).getValue());
-        assertEquals(entity.getEndTime(), ((BasicFieldSpan) rootSpan.getChildren().get(4)).getValue());
+        assertEquals(entity.getMultimediaType(), rootSpan.getChildren().get(0).getValue());
+        assertEquals(entity.getChannelId(), rootSpan.getChildren().get(1).getValue());
+        assertEquals(entity.getEventItemCode(), rootSpan.getChildren().get(2).getValue());
+        assertEquals(entity.getStartTime(), rootSpan.getChildren().get(3).getValue());
+        assertEquals(entity.getEndTime(), rootSpan.getChildren().get(4).getValue());
     }
 
 }

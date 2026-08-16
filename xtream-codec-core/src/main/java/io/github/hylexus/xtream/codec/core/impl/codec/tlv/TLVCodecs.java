@@ -23,10 +23,8 @@ import io.github.hylexus.xtream.codec.core.ExtendMetaRegistry;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
 import io.github.hylexus.xtream.codec.core.impl.DefaultExtendMetaRegistry;
 import io.github.hylexus.xtream.codec.core.impl.domain.*;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
-import io.github.hylexus.xtream.codec.core.tracker.CollectionFieldSpan;
-import io.github.hylexus.xtream.codec.core.tracker.CollectionItemSpan;
-import io.github.hylexus.xtream.codec.core.tracker.NestedFieldSpan;
 import io.github.hylexus.xtream.codec.core.type.FieldLength;
 import io.github.hylexus.xtream.codec.core.type.TLV;
 import io.github.hylexus.xtream.codec.core.type.simple.DataField;
@@ -119,29 +117,39 @@ public class TLVCodecs {
             final ValueLengthMeta lengthMeta = meta.decoder().length();
 
             final List<TLV> results = new ArrayList<>();
+            final int inputReaderIndexBeforeSlice = input.readerIndex();
             final ByteBuf slice = length > 0
                     ? input.readSlice(length)
                     : input; // all remaining
 
             int iterationTimes = propertyMetadata.iterationTimesExtractor().extractIterationTimes(context, context.evaluationContext());
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            final CollectionFieldSpan collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(propertyMetadata);
-            int sequence = 0;
-            final int parentIndexBeforeRead = slice.readerIndex();
-
-            while (slice.isReadable() && iterationTimes-- > 0) {
-                final CollectionItemSpan collectionItemSpan = codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getFieldName(), sequence++);
-                final int indexBeforeRead = slice.readerIndex();
-
-                final TLV tlv = decodeTlvWithTracker(codecTracker, propertyMetadata, context, slice, keyMeta, lengthMeta, valueMatchersByKey, fallbackValueMatcherMeta);
-                results.add(tlv);
-
-                collectionItemSpan.setHexString(FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead));
-                codecTracker.finishCurrentSpan();
+            if (length > 0) {
+                codecTracker.pushCoordinateBase(inputReaderIndexBeforeSlice);
             }
+            final CodecTraceNode collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(propertyMetadata);
+            int sequence = 0;
+            try {
+                final int parentIndexBeforeRead = slice.readerIndex();
 
-            collectionFieldSpan.setHexString(FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead));
-            codecTracker.finishCurrentSpan();
+                while (slice.isReadable() && iterationTimes-- > 0) {
+                    final CodecTraceNode collectionItemSpan = codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getName(), sequence++);
+                    final int indexBeforeRead = slice.readerIndex();
+
+                    final TLV tlv = decodeTlvWithTracker(codecTracker, propertyMetadata, context, slice, keyMeta, lengthMeta, valueMatchersByKey, fallbackValueMatcherMeta);
+                    results.add(tlv);
+
+                    codecTracker.updateContainerSpan(collectionItemSpan, null, FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead), slice.readerIndex());
+                    codecTracker.finishCurrentSpan();
+                }
+
+                codecTracker.updateContainerSpan(collectionFieldSpan, null, FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead), slice.readerIndex());
+                codecTracker.finishCurrentSpan();
+            } finally {
+                if (length > 0) {
+                    codecTracker.popCoordinateBase();
+                }
+            }
 
             return results;
         }
@@ -171,7 +179,7 @@ public class TLVCodecs {
                 return;
             }
             final CodecTracker codecTracker = requireNonNull(context.codecTracker());
-            final CollectionFieldSpan collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(propertyMetadata);
+            final CodecTraceNode collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(propertyMetadata);
             final int parentIndexBeforeWrite = output.writerIndex();
             int sequence = 0;
             final ByteBuf temp = context.bufferFactory().buffer();
@@ -181,19 +189,19 @@ public class TLVCodecs {
                         continue;
                     }
 
-                    final CollectionItemSpan collectionItemSpan = codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getFieldName(), sequence++);
+                    final CodecTraceNode collectionItemSpan = codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getName(), sequence++);
                     final int indexBeforeWrite = output.writerIndex();
 
                     encodeTlvWithTracker(context, output, tlv, codecTracker, temp, this.getClass().getSimpleName());
 
-                    collectionItemSpan.setHexString(FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite));
+                    codecTracker.updateSpan(collectionItemSpan, null, FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), indexBeforeWrite, output.writerIndex());
                     codecTracker.finishCurrentSpan();
                 }
             } finally {
                 temp.release();
             }
 
-            collectionFieldSpan.setHexString(FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite));
+            codecTracker.updateSpan(collectionFieldSpan, null, FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite), parentIndexBeforeWrite, output.writerIndex());
             codecTracker.finishCurrentSpan();
         }
 
@@ -237,12 +245,13 @@ public class TLVCodecs {
             context.entityEncoder().encodeWithTracker(tlv.value(), temp, codecTracker);
             valueLength.setValue(temp.readableBytes());
         } else {
-            final NestedFieldSpan valueTracker = codecTracker.startNewNestedFieldSpan("value", "", tlv.value().getClass().getSimpleName(), fieldCodec);
+            final CodecTraceNode valueTracker = codecTracker.startNewNestedFieldSpan("value", "", tlv.value().getClass().getSimpleName(), fieldCodec);
+            final int indexBeforeWrite = temp.writerIndex();
 
             context.entityEncoder().encodeWithTracker(tlv.value(), temp, codecTracker);
             valueLength.setValue(temp.readableBytes());
 
-            valueTracker.setHexString(FormatUtils.toHexString(temp, 0, temp.writerIndex()));
+            codecTracker.updateSpan(valueTracker, null, FormatUtils.toHexString(temp, indexBeforeWrite, temp.writerIndex() - indexBeforeWrite), indexBeforeWrite, temp.writerIndex());
             codecTracker.finishCurrentSpan();
         }
 

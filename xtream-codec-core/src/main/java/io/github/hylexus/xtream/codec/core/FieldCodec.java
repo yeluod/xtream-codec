@@ -61,7 +61,11 @@ public interface FieldCodec<T> {
         final T value = this.deserialize(propertyMetadata, context, input, length);
         final String hexString = FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead);
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        codecTracker.addFieldSpan(codecTracker.getCurrentSpan(), propertyMetadata.name(), value, hexString, this, propertyMetadata.xtreamFieldAnnotation().desc());
+        if (propertyMetadata.isEncodedLength()) {
+            codecTracker.addLengthFieldSpan(codecTracker.getCurrentSpan(), propertyMetadata.name(), value, hexString, this, propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeRead, input.readerIndex());
+        } else {
+            codecTracker.addFieldSpan(codecTracker.getCurrentSpan(), propertyMetadata.name(), value, hexString, this, propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeRead, input.readerIndex());
+        }
         return value;
     }
 
@@ -83,7 +87,11 @@ public interface FieldCodec<T> {
         this.serialize(propertyMetadata, context, output, value);
         final String hexString = FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite);
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        codecTracker.addFieldSpan(codecTracker.getCurrentSpan(), propertyMetadata.name(), value, hexString, this, propertyMetadata.xtreamFieldAnnotation().desc());
+        if (propertyMetadata.isEncodedLength()) {
+            codecTracker.addLengthFieldSpan(codecTracker.getCurrentSpan(), propertyMetadata.name(), value, hexString, this, propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeWrite, output.writerIndex());
+        } else {
+            codecTracker.addFieldSpan(codecTracker.getCurrentSpan(), propertyMetadata.name(), value, hexString, this, propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeWrite, output.writerIndex());
+        }
     }
 
     default Class<?> underlyingJavaType() {

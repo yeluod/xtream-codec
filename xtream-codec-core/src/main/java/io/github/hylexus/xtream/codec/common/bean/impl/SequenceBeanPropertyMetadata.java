@@ -18,14 +18,12 @@ package io.github.hylexus.xtream.codec.common.bean.impl;
 
 import io.github.hylexus.xtream.codec.common.bean.BeanMetadata;
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
-import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.core.BeanMetadataRegistry;
 import io.github.hylexus.xtream.codec.core.ContainerInstanceFactory;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
 import io.github.hylexus.xtream.codec.core.FieldCodecRegistry;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
-import io.github.hylexus.xtream.codec.core.tracker.CollectionFieldSpan;
-import io.github.hylexus.xtream.codec.core.tracker.CollectionItemSpan;
 import io.github.hylexus.xtream.codec.core.utils.BeanUtils;
 import io.netty.buffer.ByteBuf;
 import org.jspecify.annotations.Nullable;
@@ -87,8 +85,7 @@ public class SequenceBeanPropertyMetadata extends BasicBeanPropertyMetadata {
     protected void doEncodeWithTracker(FieldCodec.SerializeContext context, ByteBuf output, Object value) {
         @SuppressWarnings("unchecked") final Collection<@Nullable Object> collection = (Collection<Object>) value;
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        final CollectionFieldSpan collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(this);
-        final int parentIndexBeforeWrite = output.writerIndex();
+        final CodecTraceNode collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(this);
         int sequence = 0;
         for (final Object object : collection) {
             if (object == null) {
@@ -108,16 +105,13 @@ public class SequenceBeanPropertyMetadata extends BasicBeanPropertyMetadata {
                 final Class<?> entityClass = object.getClass();
                 final BeanMetadata beanMetadata = this.beanMetadataRegistry.getBeanMetadata(entityClass, context.version());
 
-                final int indexBeforeWrite = output.writerIndex();
-                final CollectionItemSpan collectionItemSpan = codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getFieldName(), sequence++);
+                codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getName(), sequence++);
 
                 context.entityEncoder().encodeWithTracker(context.version(), beanMetadata, object, output, codecTracker);
 
-                collectionItemSpan.setHexString(FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite));
                 codecTracker.finishCurrentSpan();
             }
         }
-        collectionFieldSpan.setHexString(FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite));
         codecTracker.finishCurrentSpan();
     }
 
@@ -141,25 +135,37 @@ public class SequenceBeanPropertyMetadata extends BasicBeanPropertyMetadata {
     public @Nullable Object decodePropertyValueWithTracker(FieldCodec.DeserializeContext context, ByteBuf input) {
         final int length = delegate.fieldLengthExtractor().extractFieldLength(context, context.evaluationContext(), input);
 
+        final int inputReaderIndexBeforeSlice = input.readerIndex();
         final ByteBuf slice = length < 0
                 ? input // all remaining
                 : input.readSlice(length);
         int iterationTimes = this.iterationTimesExtractor().extractIterationTimes(context, context.evaluationContext());
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        final CollectionFieldSpan collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(this);
+        final CodecTraceNode collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(this);
         @SuppressWarnings("unchecked") final Collection<@Nullable Object> list = (Collection<Object>) this.containerInstanceFactory().create();
         int sequence = 0;
-        final int parentIndexBeforeRead = input.readerIndex();
-        while (slice.isReadable() && iterationTimes-- > 0) {
-            final CollectionItemSpan collectionItemSpan = codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getFieldName(), sequence++);
-            final int indexBeforeRead = input.readerIndex();
-            final Object value = nestedBeanPropertyMetadata.decodePropertyValueWithTracker(context, slice);
-            collectionItemSpan.setHexString(FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead));
-            list.add(value);
+        if (length < 0) {
+            while (slice.isReadable() && iterationTimes-- > 0) {
+                codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getName(), sequence++);
+                final Object value = nestedBeanPropertyMetadata.decodePropertyValueWithTracker(context, slice);
+                list.add(value);
+                codecTracker.finishCurrentSpan();
+            }
             codecTracker.finishCurrentSpan();
+        } else {
+            codecTracker.pushCoordinateBase(inputReaderIndexBeforeSlice);
+            try {
+                while (slice.isReadable() && iterationTimes-- > 0) {
+                    codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getName(), sequence++);
+                    final Object value = nestedBeanPropertyMetadata.decodePropertyValueWithTracker(context, slice);
+                    list.add(value);
+                    codecTracker.finishCurrentSpan();
+                }
+                codecTracker.finishCurrentSpan();
+            } finally {
+                codecTracker.popCoordinateBase();
+            }
         }
-        collectionFieldSpan.setHexString(FormatUtils.toHexString(input, parentIndexBeforeRead, input.readerIndex() - parentIndexBeforeRead));
-        codecTracker.finishCurrentSpan();
         return list;
     }
 

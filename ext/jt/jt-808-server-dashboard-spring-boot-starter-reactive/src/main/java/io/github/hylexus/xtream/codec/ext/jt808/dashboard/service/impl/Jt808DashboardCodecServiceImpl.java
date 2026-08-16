@@ -112,14 +112,22 @@ public class Jt808DashboardCodecServiceImpl implements Jt808DashboardCodecServic
         final CodecTracker tracker = new CodecTracker();
         if (dto.getHexString().size() == 1) {
             final DecodedMessageMetadata parsed = this.parse(dto.getHexString().getFirst());
-            final ByteBuf source = XtreamBytes.byteBufFromHexString(ByteBufAllocator.DEFAULT, parsed.getDecryptedHexString() != null ? parsed.getDecryptedHexString() : parsed.getEscapedHexString());
+            final String tracePayloadHex = parsed.getDecryptedHexString() != null ? parsed.getDecryptedHexString() : parsed.getEscapedHexString();
+            final ByteBuf source = XtreamBytes.byteBufFromHexString(ByteBufAllocator.DEFAULT, tracePayloadHex);
             try {
+                tracker.getTrace().setPayloadHex(tracePayloadHex);
                 this.entityCodec.decode(parsed.getHeader().version().versionValue(), entityInstance, source.slice(), tracker);
-                tracker.getRootSpan().setHexString("7e" + tracker.getRootSpan().getHexString() + "7e");
                 return new DecodedMessageVo(new DecodedMessageVo.Single()
                         .setRawHexString("7e" + parsed.getOriginalHexString() + "7e")
                         .setEscapedHexString("7e" + parsed.getEscapedHexString() + "7e")
-                        .setDetails(tracker.getRootSpan())
+                        .setDetails(tracker.toTraceView())
+                );
+            } catch (RuntimeException e) {
+                this.recordDecodeFailure(tracker, e, source);
+                return new DecodedMessageVo(new DecodedMessageVo.Single()
+                        .setRawHexString("7e" + parsed.getOriginalHexString() + "7e")
+                        .setEscapedHexString("7e" + parsed.getEscapedHexString() + "7e")
+                        .setDetails(tracker.toTraceView())
                 );
             } finally {
                 XtreamBytes.releaseBuf(source);
@@ -147,8 +155,9 @@ public class Jt808DashboardCodecServiceImpl implements Jt808DashboardCodecServic
                     .addComponent(true, bodyBytes)
                     .addComponent(true, ByteBufAllocator.DEFAULT.buffer().writeByte(0));
 
+            final String mergedHexString = FormatUtils.toHexString(source);
+            tracker.getTrace().setPayloadHex(mergedHexString);
             this.entityCodec.decode(newHeader.version().versionValue(), entityInstance, source.slice(), tracker);
-            tracker.getRootSpan().setHexString("7e" + tracker.getRootSpan().getHexString() + "7e");
             final List<DecodedMessageVo.SubPackageMetadata> headerList = tempList.stream().map(it -> {
                 final Jt808MessageHeaderMetadata headerMetadata = new Jt808MessageHeaderMetadata();
                 final Jt808RequestHeader header = it.getHeader();
@@ -170,7 +179,14 @@ public class Jt808DashboardCodecServiceImpl implements Jt808DashboardCodecServic
             }).toList();
             return new DecodedMessageVo(new DecodedMessageVo.Multiple()
                     .setSubPackageMetadata(headerList)
-                    .setDetails(tracker.getRootSpan())
+                    .setDetails(tracker.toTraceView())
+                    .setMergedHexString("7e" + mergedHexString + "7e")
+            );
+        } catch (RuntimeException e) {
+            this.recordDecodeFailure(tracker, e, source);
+            return new DecodedMessageVo(new DecodedMessageVo.Multiple()
+                    .setSubPackageMetadata(List.of())
+                    .setDetails(tracker.toTraceView())
                     .setMergedHexString("7e" + FormatUtils.toHexString(source) + "7e")
             );
         } finally {
@@ -190,6 +206,12 @@ public class Jt808DashboardCodecServiceImpl implements Jt808DashboardCodecServic
             return hex.substring(2, hex.length() - 2);
         }
         return hex;
+    }
+
+    private void recordDecodeFailure(CodecTracker tracker, RuntimeException e, ByteBuf source) {
+        if (tracker.getTrace().getDiagnostics().isEmpty()) {
+            tracker.recordFailure(e, source.readerIndex());
+        }
     }
 
     private ByteBuf hexStringToByteBuf(String hexString) {

@@ -20,10 +20,9 @@ import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
 import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.common.utils.XtreamTypes;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
-import io.github.hylexus.xtream.codec.core.tracker.MapEntryItemSpan;
-import io.github.hylexus.xtream.codec.core.tracker.MapEntrySpan;
-import io.github.hylexus.xtream.codec.core.tracker.NestedFieldSpan;
 import io.netty.buffer.ByteBuf;
 import org.jspecify.annotations.Nullable;
 
@@ -61,15 +60,14 @@ public class EntityFieldCodec<E> implements FieldCodec<Object> {
 
         final Object value;
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        if (codecTracker.getCurrentSpan() instanceof MapEntrySpan) {
-            final MapEntryItemSpan mapEntryItemSpan = codecTracker.startNewMapEntryItemSpan(codecTracker.getCurrentSpan(), MapEntryItemSpan.Type.VALUE, this);
+        if (codecTracker.getCurrentSpan().getKind() == CodecTraceNodeKind.MAP_ENTRY) {
+            final CodecTraceNode mapEntryItemSpan = codecTracker.startNewMapEntryItemSpan(codecTracker.getCurrentSpan(), CodecTracker.MapEntryItemType.VALUE, this);
             value = context.entityDecoder().decodeWithTracker(context.version(), this.entityClass, input, codecTracker);
-            mapEntryItemSpan.setValue(value);
-            mapEntryItemSpan.setHexString(FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead));
+            codecTracker.updateContainerSpan(mapEntryItemSpan, value, FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead), input.readerIndex());
         } else {
-            final NestedFieldSpan nestedFieldSpan = codecTracker.startNewNestedFieldSpan(propertyMetadata, this, this.entityClass.getSimpleName());
+            final CodecTraceNode nestedFieldSpan = codecTracker.startNewNestedFieldSpan(propertyMetadata, this, this.entityClass.getSimpleName());
             value = context.entityDecoder().decodeWithTracker(context.version(), this.entityClass, input, codecTracker);
-            nestedFieldSpan.setHexString(FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead));
+            codecTracker.updateContainerSpan(nestedFieldSpan, null, FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead), input.readerIndex());
         }
 
         codecTracker.finishCurrentSpan();
@@ -85,15 +83,14 @@ public class EntityFieldCodec<E> implements FieldCodec<Object> {
     public void serializeWithTracker(BeanPropertyMetadata propertyMetadata, SerializeContext context, ByteBuf output, @Nullable Object instance) {
         final int indexBeforeWrite = output.writerIndex();
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        if (codecTracker.getCurrentSpan() instanceof MapEntrySpan) {
-            final MapEntryItemSpan mapEntryItemSpan = codecTracker.startNewMapEntryItemSpan(codecTracker.getCurrentSpan(), MapEntryItemSpan.Type.VALUE, this);
+        if (codecTracker.getCurrentSpan().getKind() == CodecTraceNodeKind.MAP_ENTRY) {
+            final CodecTraceNode mapEntryItemSpan = codecTracker.startNewMapEntryItemSpan(codecTracker.getCurrentSpan(), CodecTracker.MapEntryItemType.VALUE, this);
             context.entityEncoder().encodeWithTracker(context.version(), instance, output, codecTracker);
-            mapEntryItemSpan.setValue(instance);
-            mapEntryItemSpan.setHexString(FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite));
+            codecTracker.updateSpan(mapEntryItemSpan, instance, FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), indexBeforeWrite, output.writerIndex());
         } else {
-            final NestedFieldSpan nestedFieldSpan = codecTracker.startNewNestedFieldSpan(propertyMetadata, this, this.entityClass.getSimpleName());
+            final CodecTraceNode nestedFieldSpan = codecTracker.startNewNestedFieldSpan(propertyMetadata, this, this.entityClass.getSimpleName());
             context.entityEncoder().encodeWithTracker(context.version(), instance, output, codecTracker);
-            nestedFieldSpan.setHexString(FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite));
+            codecTracker.updateSpan(nestedFieldSpan, null, FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), indexBeforeWrite, output.writerIndex());
         }
         codecTracker.finishCurrentSpan();
     }

@@ -29,31 +29,31 @@ import java.util.StringJoiner;
  */
 public class BuiltinMessage0100V2011 {
     // 1. [0-2) WORD 省域ID
-    @Preset.JtStyle.Word
+    @Preset.JtStyle.Word(desc = "省域ID")
     private int provinceId;
 
-    // 2. [2-4) WORD 省域ID
-    @Preset.JtStyle.Word
+    // 2. [2-4) WORD 市域ID
+    @Preset.JtStyle.Word(desc = "市域ID")
     private int cityId;
 
     // 3. [4-9) BYTE[5] 制造商ID
-    @Preset.JtStyle.Bytes(length = 5)
+    @Preset.JtStyle.Bytes(length = 5, desc = "制造商ID")
     private String manufacturerId;
 
     // 4. [9-17) BYTE[8] 终端型号
-    @Preset.JtStyle.Bytes(length = 8)
+    @Preset.JtStyle.Bytes(length = 8, desc = "终端型号")
     private String terminalType;
 
     // 5. [17-24) BYTE[7] 终端ID
-    @Preset.JtStyle.Bytes(length = 7)
+    @Preset.JtStyle.Bytes(length = 7, desc = "终端ID")
     private String terminalId;
 
     // 6. [24]   BYTE    车牌颜色
-    @Preset.JtStyle.Byte
+    @Preset.JtStyle.Byte(desc = "车牌颜色")
     private short color;
 
     // 7. [25,n)   String    车辆标识
-    @Preset.JtStyle.Str
+    @Preset.JtStyle.Str(desc = "车辆标识")
     private String carIdentifier;
 
     public int getProvinceId() {

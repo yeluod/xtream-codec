@@ -20,10 +20,13 @@ import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.common.utils.XtreamBytes;
 import io.github.hylexus.xtream.codec.core.EntityCodec;
 import io.github.hylexus.xtream.codec.core.annotation.Expression;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTrace;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceDirection;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceStatus;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceView;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
-import io.github.hylexus.xtream.codec.core.tracker.RootSpan;
-import io.github.hylexus.xtream.codec.core.tracker.VirtualEntitySpan;
-import io.github.hylexus.xtream.codec.core.tracker.VirtualFieldSpan;
 import io.github.hylexus.xtream.codec.core.type.Preset;
 import io.github.hylexus.xtream.codec.ext.jt808.codec.Jt808BytesProcessor;
 import io.github.hylexus.xtream.codec.ext.jt808.codec.Jt808ResponseEncoder;
@@ -161,12 +164,6 @@ public class DefaultJt808ResponseEncoder implements Jt808ResponseEncoder {
             if (needTracker) {
                 final Jt808MessageDescriber.Tracker last = Objects.requireNonNull(describer.trackers()).getLast();
                 last.setEscapedHexString("7e" + FormatUtils.toHexString(escaped) + "7e");
-                final RootSpan details = last.getDetails();
-                details.setHexString(
-                        details.getChildren().get(0).getHexString()
-                                + details.getChildren().get(1).getHexString()
-                                + details.getChildren().get(2).getHexString()
-                );
             }
         } catch (Throwable e) {
             XtreamBytes.releaseBuf(compositeByteBuf);
@@ -204,22 +201,82 @@ public class DefaultJt808ResponseEncoder implements Jt808ResponseEncoder {
             XtreamBytes.releaseBuf(tempHeaderBuffer);
         }
 
-        final RootSpan details = new RootSpan().setEntityClass("VirtualEntity");
-        responseTracker.setDetails(details);
+        final CodecTrace details = new CodecTrace()
+                .setDirection(CodecTraceDirection.ENCODE)
+                .setEntityClass("VirtualEntity")
+                .setPayloadHex(FormatUtils.toHexString(message));
+        details.getRoot()
+                .setByteRange(0, message.readableBytes())
+                .setStatus(CodecTraceStatus.SUCCESS);
 
         // 1. header
-        details.getChildren().add(new VirtualEntitySpan(headerTracker.getRootSpan(), "header", "消息头"));
+        final int headerLength = message.readableBytes() - body.readableBytes() - 1;
+        final CodecTraceNode headerNode = addVirtualEntity(details.getRoot(), "header", "消息头", message, 0, headerLength);
+        copyChildren(headerTracker.getTrace().getRoot(), headerNode, 0);
 
         // 2. body
+        final int bodyStart = headerLength;
+        final int bodyEnd = bodyStart + body.readableBytes();
         if (totalSubPackageCount == 0 && currentPackageNo == 0) {
-            details.getChildren().add(new VirtualEntitySpan(tracker.getRootSpan(), "body", "消息体"));
+            final CodecTraceNode bodyNode = addVirtualEntity(details.getRoot(), "body", "消息体", message, bodyStart, bodyEnd);
+            copyChildren(tracker.getTrace().getRoot(), bodyNode, bodyStart);
         } else {
-            // details.getChildren().add(new VirtualFieldSpan("body", "消息体", "ByteBuf", body).setHexString(FormatUtils.toHexString(body)));
-            details.getChildren().add(new VirtualFieldSpan("body", "消息体", "ByteBuf", null).setHexString(FormatUtils.toHexString(body)));
+            addVirtualField(details.getRoot(), "body", "消息体", "ByteBuf", null, message, bodyStart, bodyEnd);
         }
 
         // 3. checkSum
-        details.getChildren().add(new VirtualFieldSpan("checkSum", "校验码", "java.lang.Byte", checkSum).setHexString(FormatUtils.toHexString(checkSum, 2)));
+        addVirtualField(details.getRoot(), "checkSum", "校验码", "java.lang.Byte", checkSum, message, bodyEnd, bodyEnd + 1);
+        responseTracker.setDetails(CodecTraceView.from(details));
+    }
+
+    private static CodecTraceNode addVirtualEntity(CodecTraceNode parent, String name, String fieldDesc, ByteBuf source, int start, int end) {
+        final CodecTraceNode node = new CodecTraceNode(CodecTraceNodeKind.VIRTUAL_ENTITY, name, parent)
+                .setJavaType("VirtualEntity")
+                .setHex(FormatUtils.toHexString(source, start, end - start))
+                .setByteRange(start, end)
+                .setStatus(CodecTraceStatus.SUCCESS)
+                .putAttribute("fieldDesc", fieldDesc);
+        parent.addChild(node);
+        return node;
+    }
+
+    private static CodecTraceNode addVirtualField(CodecTraceNode parent, String name, String fieldDesc, String javaType, @Nullable Object value, ByteBuf source, int start, int end) {
+        final CodecTraceNode node = new CodecTraceNode(CodecTraceNodeKind.VIRTUAL_FIELD, name, parent)
+                .setJavaType(javaType)
+                .setValue(value)
+                .setHex(FormatUtils.toHexString(source, start, end - start))
+                .setByteRange(start, end)
+                .setStatus(CodecTraceStatus.SUCCESS)
+                .putAttribute("fieldDesc", fieldDesc);
+        parent.addChild(node);
+        return node;
+    }
+
+    private static void copyChildren(CodecTraceNode sourceRoot, CodecTraceNode targetParent, int offset) {
+        for (final CodecTraceNode sourceChild : sourceRoot.getChildren()) {
+            copyNode(sourceChild, targetParent, offset);
+        }
+    }
+
+    private static CodecTraceNode copyNode(CodecTraceNode source, CodecTraceNode targetParent, int offset) {
+        final CodecTraceNode target = new CodecTraceNode(source.getKind(), source.getName(), targetParent)
+                .setJavaType(source.getJavaType())
+                .setCodecType(source.getCodecType())
+                .setValue(source.getValue())
+                .setHex(source.getHex())
+                .setByteRange(shift(source.getByteStart(), offset), shift(source.getByteEnd(), offset))
+                .setStatus(source.getStatus());
+        target.getAttributes().putAll(source.getAttributes());
+        target.getDiagnostics().addAll(source.getDiagnostics());
+        targetParent.addChild(target);
+        for (final CodecTraceNode sourceChild : source.getChildren()) {
+            copyNode(sourceChild, target, offset);
+        }
+        return target;
+    }
+
+    private static @Nullable Integer shift(@Nullable Integer value, int offset) {
+        return value == null ? null : value + offset;
     }
 
     private ByteBuf encodeBody(Jt808MessageDescriber describer, Object entity, @Nullable CodecTracker tracker) {

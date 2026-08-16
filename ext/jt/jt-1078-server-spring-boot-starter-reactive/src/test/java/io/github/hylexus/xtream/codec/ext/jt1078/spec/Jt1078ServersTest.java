@@ -40,6 +40,7 @@ import reactor.netty.tcp.TcpServer;
 import reactor.netty.udp.UdpServer;
 
 import java.lang.reflect.Field;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.function.Consumer;
@@ -151,14 +152,14 @@ class Jt1078ServersTest {
         return captor.getValue();
     }
 
-    @SuppressWarnings("unchecked")
     private static Connection tcpConnection() {
         final Connection connection = mock(Connection.class, Answers.RETURNS_SELF);
         final NettyInbound inbound = mock(NettyInbound.class, Answers.RETURNS_SELF);
         final Channel channel = mock(Channel.class);
         when(connection.inbound()).thenReturn(inbound);
         when(connection.channel()).thenReturn(channel);
-        when(channel.remoteAddress()).thenReturn(new InetSocketAddress("127.0.0.1", 12345));
+        // when(channel.remoteAddress()).thenReturn(new InetSocketAddress("127.0.0.1", 12345));
+        when(channel.remoteAddress()).thenReturn(new InetSocketAddress(InetAddress.getLoopbackAddress(), 12345));
         when(inbound.withConnection(any())).thenAnswer(invocation -> {
             final Consumer<Connection> consumer = invocation.getArgument(0);
             consumer.accept(connection);

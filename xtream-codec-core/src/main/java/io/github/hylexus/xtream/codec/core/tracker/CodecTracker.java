@@ -18,32 +18,112 @@ package io.github.hylexus.xtream.codec.core.tracker;
 
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
-import io.github.hylexus.xtream.codec.core.type.TLV;
 import org.jspecify.annotations.Nullable;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
-import java.util.List;
 import java.util.function.BiConsumer;
 
+/**
+ * 编解码调试跟踪器。
+ *
+ * @author hylexus
+ * @author Codex (AI)
+ */
 @SuppressWarnings("NullAway")
 public class CodecTracker {
-    private final RootSpan root;
-    private BaseSpan current;
-    private MapEntryItemSpan.@Nullable Type tempMapItemType;
+    private final CodecTraceRecorder recorder;
+    private CodecTraceNode current;
+    private boolean tracing;
+    private @Nullable MapEntryItemType tempMapItemType;
     private @Nullable String tempFieldName;
 
     public CodecTracker() {
-        final RootSpan rootSpan = new RootSpan();
-        this.root = rootSpan;
-        this.current = rootSpan;
+        this.recorder = new CodecTraceRecorder();
+        this.current = this.recorder.trace().getRoot();
     }
 
-    public RootSpan getRootSpan() {
-        return this.root;
+    /**
+     * 返回结构化编解码跟踪结果。
+     *
+     * @since 0.9.0
+     */
+    public CodecTrace getTrace() {
+        return this.recorder.trace();
     }
 
-    public void updateTrackerHints(MapEntryItemSpan.Type type) {
+    /**
+     * 返回面向 Web 调试页面的跟踪视图。
+     *
+     * @since 0.9.0
+     */
+    public CodecTraceView toTraceView() {
+        return CodecTraceView.from(this.getTrace());
+    }
+
+    public boolean isTracing() {
+        return tracing;
+    }
+
+    public void beginEncode(int rootStartAbsolute, @Nullable String entityClass) {
+        this.recorder.begin(CodecTraceDirection.ENCODE, rootStartAbsolute, entityClass);
+        this.current = this.recorder.trace().getRoot();
+        this.tracing = true;
+    }
+
+    public void beginDecode(int rootStartAbsolute, @Nullable String entityClass) {
+        this.recorder.begin(CodecTraceDirection.DECODE, rootStartAbsolute, entityClass);
+        this.current = this.recorder.trace().getRoot();
+        this.tracing = true;
+    }
+
+    public void finishTrace(@Nullable String payloadHex, int rootEndAbsolute) {
+        this.recorder.finish(payloadHex, rootEndAbsolute);
+        this.tracing = false;
+    }
+
+    /**
+     * 进入一个从当前 ByteBuf 派生出来的 slice，后续子节点的 readerIndex 会按该 slice 起点折算到根报文坐标。
+     *
+     * @since 0.9.0
+     */
+    public void pushCoordinateBase(int currentBufferOffset) {
+        this.recorder.pushCoordinateBase(currentBufferOffset);
+    }
+
+    /**
+     * 离开当前 slice 坐标范围。
+     *
+     * @since 0.9.0
+     */
+    public void popCoordinateBase() {
+        this.recorder.popCoordinateBase();
+    }
+
+    /**
+     * 开始记录一个从零开始计数的临时缓冲区。
+     *
+     * @since 0.9.0
+     */
+    public TemporaryBufferScope openTemporaryBuffer() {
+        return new TemporaryBufferScope(this.recorder.beginTemporaryBuffer());
+    }
+
+    /**
+     * 将临时缓冲区中新产生的节点平移到正式报文坐标。
+     *
+     * @since 0.9.0
+     */
+    public void relocateTemporaryChildren(CodecTraceNode parent, int fromIndex, int toIndex, int targetStart) {
+        this.recorder.relocateTemporaryChildren(parent, fromIndex, toIndex, targetStart);
+    }
+
+    public void recordFailure(Throwable throwable, int absoluteOffset) {
+        this.recorder.fail(throwable, absoluteOffset);
+        this.tracing = false;
+    }
+
+    public void updateTrackerHints(MapEntryItemType type) {
         this.tempMapItemType = type;
     }
 
@@ -60,181 +140,164 @@ public class CodecTracker {
         return name;
     }
 
-    public NestedFieldSpan startNewNestedFieldSpan(BeanPropertyMetadata metadata, FieldCodec<?> fieldCodec, String fieldType) {
+    public CodecTraceNode startNewNestedFieldSpan(BeanPropertyMetadata metadata, @Nullable FieldCodec<?> fieldCodec, String fieldType) {
         final String fieldCodecString = fieldCodec == null
                 ? null
                 : fieldCodec.getClass().getSimpleName();
         return this.startNewNestedFieldSpan(metadata, fieldCodecString, fieldType);
     }
 
-    public NestedFieldSpan startNewNestedFieldSpan(BeanPropertyMetadata metadata, @Nullable String fieldCodec, @Nullable String fieldType) {
-        final NestedFieldSpan span = new NestedFieldSpan(
-                this.current,
-                getFieldName(metadata.name()), metadata.xtreamFieldAnnotation().desc(),
-                metadata.field().getType().getTypeName(),
-                fieldCodec);
-        if (fieldType != null) {
-            span.setFieldType(fieldType);
-        } else if (this.current instanceof CollectionItemSpan collectionItemSpan) {
-            // final String fieldName = collectionItemSpan.getFieldName() + "(" + collectionItemSpan.getOffset() + ")";
-            // span.setFieldName(fieldName);
-            span.setFieldType(collectionItemSpan.getFieldType());
-        }
-        return this.addSpan(span);
+    public CodecTraceNode startNewNestedFieldSpan(BeanPropertyMetadata metadata, @Nullable String fieldCodec, @Nullable String fieldType) {
+        final String resolvedFieldName = getFieldName(metadata.name());
+        final CodecTraceNode node = this.recorder.enterNode(this.current, CodecTraceNodeKind.NESTED_FIELD, resolvedFieldName)
+                .setJavaType(fieldType == null ? metadata.field().getType().getTypeName() : fieldType)
+                .setCodecType(fieldCodec)
+                .putAttribute("fieldDesc", metadata.xtreamFieldAnnotation().desc());
+        this.current = node;
+        return node;
     }
 
-    public NestedFieldSpan startNewNestedFieldSpan(String name, String desc, String fieldType, @Nullable String fieldCodec) {
-        final NestedFieldSpan span = new NestedFieldSpan(
-                this.current,
-                getFieldName(name), desc,
-                fieldType,
-                fieldCodec);
-        if (fieldType != null) {
-            span.setFieldType(fieldType);
-        } else if (this.current instanceof CollectionItemSpan collectionItemSpan) {
-            final String fieldName = collectionItemSpan.getFieldName() + "(" + collectionItemSpan.getOffset() + ")";
-            span.setFieldName(fieldName);
-            span.setFieldType(collectionItemSpan.getFieldType());
-        }
-        return this.addSpan(span);
+    public CodecTraceNode startNewNestedFieldSpan(String name, String desc, String fieldType, @Nullable String fieldCodec) {
+        final CodecTraceNode node = this.recorder.enterNode(this.current, CodecTraceNodeKind.NESTED_FIELD, getFieldName(name))
+                .setJavaType(fieldType)
+                .setCodecType(fieldCodec)
+                .putAttribute("fieldDesc", desc);
+        this.current = node;
+        return node;
     }
 
-    public CollectionFieldSpan startNewCollectionFieldSpan(BeanPropertyMetadata metadata) {
-        final CollectionFieldSpan span = new CollectionFieldSpan(this.current, getFieldName(metadata.name()), this.getFieldFirstGenericTypeName(metadata.field()), metadata.xtreamFieldAnnotation().desc());
-        return this.addSpan(span);
+    public CodecTraceNode startNewCollectionFieldSpan(BeanPropertyMetadata metadata) {
+        final CodecTraceNode node = this.recorder.enterNode(this.current, CodecTraceNodeKind.COLLECTION, getFieldName(metadata.name()))
+                .setJavaType(this.getFieldFirstGenericTypeName(metadata.field()))
+                .putAttribute("fieldDesc", metadata.xtreamFieldAnnotation().desc());
+        this.current = node;
+        return node;
     }
 
-    public CollectionFieldSpan startNewCollectionFieldSpanForSimpleField(String name) {
-        final CollectionFieldSpan span = new CollectionFieldSpan(this.current, name, "SimpleField", "");
-        return this.addSpan(span);
+    public CodecTraceNode startNewCollectionFieldSpanForSimpleField(String name) {
+        final CodecTraceNode node = this.recorder.enterNode(this.current, CodecTraceNodeKind.COLLECTION, name)
+                .setJavaType("SimpleField")
+                .putAttribute("fieldDesc", "");
+        this.current = node;
+        return node;
     }
 
-    public CollectionItemSpan startNewCollectionItemSpan(BaseSpan parent, String fieldName, int sequence) {
-        final String fieldType = this.current instanceof CollectionFieldSpan collectionFieldSpan
-                ? collectionFieldSpan.getFieldType()
-                : null;
-        fieldName = getFieldName(fieldName + "[" + sequence + "]");
-        final CollectionItemSpan span = new CollectionItemSpan(parent, fieldName, sequence, fieldType);
-        return this.addSpan(span);
+    public CodecTraceNode startNewCollectionItemSpan(CodecTraceNode parent, String fieldName, int sequence) {
+        final String itemName = getFieldName(fieldName + "[" + sequence + "]");
+        final CodecTraceNode node = this.recorder.enterNode(parent, CodecTraceNodeKind.COLLECTION_ITEM, itemName)
+                .setJavaType(parent.getJavaType())
+                .putAttribute("itemIndex", sequence);
+        this.current = node;
+        return node;
     }
 
-    public MapFieldSpan startNewMapFieldSpan(BeanPropertyMetadata metadata, String fieldCodec) {
-        final MapFieldSpan span = new MapFieldSpan(this.current, metadata.name(), metadata.xtreamFieldAnnotation().desc(), fieldCodec);
-        return this.addSpan(span);
+    public CodecTraceNode startNewMapFieldSpan(BeanPropertyMetadata metadata, String fieldCodec) {
+        final CodecTraceNode node = this.recorder.enterNode(this.current, CodecTraceNodeKind.MAP, metadata.name())
+                .setCodecType(fieldCodec)
+                .putAttribute("fieldDesc", metadata.xtreamFieldAnnotation().desc());
+        this.current = node;
+        return node;
     }
 
-    public MapFieldSpan startNewMapFieldSpan(String name, String desc, String fieldCodec) {
-        final MapFieldSpan span = new MapFieldSpan(this.current, name, desc, fieldCodec);
-        return this.addSpan(span);
+    public CodecTraceNode startNewMapFieldSpan(String name, String desc, String fieldCodec) {
+        final CodecTraceNode node = this.recorder.enterNode(this.current, CodecTraceNodeKind.MAP, name)
+                .setCodecType(fieldCodec)
+                .putAttribute("fieldDesc", desc);
+        this.current = node;
+        return node;
     }
 
-    public MapEntrySpan startNewMapEntrySpan(BaseSpan parent, String fieldName, int sequence) {
-        final MapEntrySpan mapEntrySpan = new MapEntrySpan(parent, fieldName, sequence);
-        return this.addSpan(mapEntrySpan);
+    public CodecTraceNode startNewMapEntrySpan(CodecTraceNode parent, String fieldName, int sequence) {
+        final CodecTraceNode node = this.recorder.enterNode(parent, CodecTraceNodeKind.MAP_ENTRY, "[" + sequence + "]")
+                .putAttribute("fieldName", fieldName)
+                .putAttribute("itemIndex", sequence);
+        this.current = node;
+        return node;
+    }
+
+    public CodecTraceNode startNewMapEntryItemSpan(CodecTraceNode parent, MapEntryItemType type, FieldCodec<?> fieldCodec) {
+        final CodecTraceNode node = this.recorder.enterNode(parent, CodecTraceNodeKind.MAP_ENTRY_ITEM, mapEntryItemName(type))
+                .setCodecType(fieldCodec.getClass().getSimpleName())
+                .putAttribute("mapItemType", type);
+        this.current = node;
+        return node;
     }
 
     public void finishCurrentSpan() {
-        this.current = this.current.getParent();
+        this.recorder.exitNode(this.current);
+        final CodecTraceNode parent = this.recorder.parentOf(this.current);
+        this.current = parent == null ? this.recorder.trace().getRoot() : parent;
         resetTempStatus();
+    }
+
+    public CodecTraceNode addPrependLengthFieldSpan(CodecTraceNode parent, String fieldName, @Nullable Object value, @Nullable String hexString, String fieldCodec, String fieldDesc) {
+        final CodecTraceNode node = this.recorder.addLeaf(CodecTraceNodeKind.LENGTH_FIELD, parent, fieldName, value, hexString, fieldCodec, null, fieldDesc, null, null);
+        this.current = parent;
+        this.resetTempStatus();
+        return node;
+    }
+
+    public void addFieldSpan(CodecTraceNode parent, String fieldName, @Nullable Object value, String hexString, FieldCodec<?> fieldCodec, String fieldDesc) {
+        this.addFieldSpan(parent, fieldName, value, hexString, fieldCodec.getClass().getSimpleName(), fieldDesc);
+    }
+
+    public void addFieldSpan(CodecTraceNode parent, String fieldName, @Nullable Object value, String hexString, FieldCodec<?> fieldCodec, String fieldDesc, int absoluteStart, int absoluteEnd) {
+        this.addFieldSpan(parent, fieldName, value, hexString, fieldCodec.getClass().getSimpleName(), fieldDesc, absoluteStart, absoluteEnd);
+    }
+
+    public void addFieldSpan(CodecTraceNode parent, String fieldName, @Nullable Object value, String hexString, String fieldCodec, String fieldDesc) {
+        this.addFieldSpan(parent, fieldName, value, hexString, fieldCodec, fieldDesc, null, null, CodecTraceNodeKind.FIELD);
+    }
+
+    public void addFieldSpan(CodecTraceNode parent, String fieldName, @Nullable Object value, String hexString, String fieldCodec, String fieldDesc, int absoluteStart, int absoluteEnd) {
+        this.addFieldSpan(parent, fieldName, value, hexString, fieldCodec, fieldDesc, absoluteStart, absoluteEnd, CodecTraceNodeKind.FIELD);
+    }
+
+    private void addFieldSpan(CodecTraceNode parent, String fieldName, @Nullable Object value, String hexString, String fieldCodec, String fieldDesc,
+                              @Nullable Integer absoluteStart, @Nullable Integer absoluteEnd, CodecTraceNodeKind defaultKind) {
+        final boolean mapEntryItem = parent.getKind() == CodecTraceNodeKind.MAP_ENTRY;
+        final CodecTraceNodeKind kind = mapEntryItem ? CodecTraceNodeKind.MAP_ENTRY_ITEM : defaultKind;
+        final String name = mapEntryItem ? mapEntryItemName(this.tempMapItemType) : getFieldName(fieldName);
+        final CodecTraceNode node = this.recorder.addLeaf(kind, parent, name, value, hexString, fieldCodec, null, fieldDesc, absoluteStart, absoluteEnd);
+        if (this.tempMapItemType != null) {
+            node.putAttribute("mapItemType", this.tempMapItemType);
+        }
+        this.current = parent;
+        this.resetTempStatus();
+    }
+
+    public void addLengthFieldSpan(CodecTraceNode parent, String fieldName, @Nullable Object value, String hexString, FieldCodec<?> fieldCodec, String fieldDesc, int absoluteStart, int absoluteEnd) {
+        this.addFieldSpan(parent, fieldName, value, hexString, fieldCodec.getClass().getSimpleName(), fieldDesc, absoluteStart, absoluteEnd, CodecTraceNodeKind.LENGTH_FIELD);
+    }
+
+    public void updateSpan(CodecTraceNode node, @Nullable Object value, @Nullable String hexString, int absoluteStart, int absoluteEnd) {
+        this.recorder.updateLeaf(node, value, hexString, absoluteStart, absoluteEnd);
+    }
+
+    /**
+     * 更新容器节点的结束位置，但保留节点创建时记录的起点。
+     *
+     * @since 0.9.0
+     */
+    public void updateContainerSpan(CodecTraceNode node, @Nullable Object value, @Nullable String hexString, @Nullable Integer absoluteEnd) {
+        this.recorder.updateContainerNode(node, value, hexString, absoluteEnd);
+    }
+
+    public CodecTraceNode getCurrentSpan() {
+        return this.current;
+    }
+
+    public void visit() {
+        this.visit((level, node) -> System.out.println(("\t".repeat(level)) + "[==> " + level + "] " + node));
+    }
+
+    public void visit(BiConsumer<Integer, CodecTraceNode> consumer) {
+        this.recorder.trace().visit(consumer);
     }
 
     private void resetTempStatus() {
         this.tempFieldName = null;
         this.tempMapItemType = null;
-    }
-
-    public PrependLengthFieldSpan addPrependLengthFieldSpan(BaseSpan parent, String fieldName, @Nullable Object value, @Nullable String hexString, String fieldCodec, String fieldDesc) {
-        final PrependLengthFieldSpan span = new PrependLengthFieldSpan(parent, fieldName, fieldCodec, value, hexString, fieldDesc);
-        this.current.addChild(span);
-        this.current = parent;
-        this.resetTempStatus();
-        return span;
-    }
-
-    public MapEntryItemSpan startNewMapEntryItemSpan(BaseSpan parent, MapEntryItemSpan.Type type, FieldCodec<?> fieldCodec) {
-        final MapEntryItemSpan span = new MapEntryItemSpan(parent, type);
-        span.setFieldCodec(fieldCodec.getClass().getSimpleName());
-        this.current.addChild(span);
-        this.current = span;
-        return span;
-    }
-
-    public void addFieldSpan(BaseSpan parent, String fieldName, @Nullable Object value, String hexString, FieldCodec<?> fieldCodec, String fieldDesc) {
-        this.addFieldSpan(parent, fieldName, value, hexString, fieldCodec.getClass().getSimpleName(), fieldDesc);
-        this.resetTempStatus();
-    }
-
-    public void addFieldSpan(BaseSpan parent, String fieldName, @Nullable Object value, String hexString, String fieldCodec, String fieldDesc) {
-        fieldName = getFieldName(fieldName);
-        final BaseSpan trackerItem;
-        boolean needAdd = true;
-        if (parent instanceof MapEntrySpan) {
-            trackerItem = new MapEntryItemSpan(parent, this.tempMapItemType)
-                    .setFieldCodec(fieldCodec)
-                    .setValue(value)
-                    .setHexString(hexString);
-            final List<BaseSpan> children = this.current.getChildren();
-            if (this.tempMapItemType == MapEntryItemSpan.Type.VALUE_LENGTH && children.size() == 2) {
-                this.current.addChild(children.size() - 1, trackerItem);
-                needAdd = false;
-            }
-        } else {
-            trackerItem = new BasicFieldSpan(parent, fieldName, fieldDesc)
-                    .setFieldCodec(fieldCodec)
-                    .setValue(value)
-                    .setHexString(hexString);
-
-            if (parent instanceof NestedFieldSpan nestedFieldSpan
-                    && "tlv".equalsIgnoreCase(nestedFieldSpan.getFieldType())
-                    && this.current.getChildren().size() == 2) {
-                this.current.addChild(this.current.getChildren().size() - 1, trackerItem);
-                needAdd = false;
-            } else if (parent instanceof CollectionItemSpan collectionItemSpan
-                    && TLV.class.getName().equals(collectionItemSpan.getFieldType())
-                    && this.current.getChildren().size() == 2) {
-                if (this.current.getChildren().getLast() instanceof BaseSpan.HasFieldName hasFieldName
-                        && "length".equalsIgnoreCase(fieldName)
-                        && !"length".equalsIgnoreCase(hasFieldName.getFieldName())
-                        && trackerItem instanceof BaseSpan.HasFieldName item) {
-                    item.setFieldName(fieldName);
-                    this.current.addChild(this.current.getChildren().size() - 1, trackerItem);
-                    needAdd = false;
-                }
-            }
-        }
-        if (needAdd) {
-            this.current.addChild(trackerItem);
-        }
-        this.current = parent;
-        this.resetTempStatus();
-    }
-
-    public BaseSpan getCurrentSpan() {
-        return this.current;
-    }
-
-    protected <T extends BaseSpan> T addSpan(T span) {
-        this.current.addChild(span);
-        this.current = span;
-        return span;
-    }
-
-    public void visit() {
-        this.visit((level, span) -> {
-            // ...
-            System.out.println(("\t".repeat(level)) + "[==> " + level + "] " + span);
-        });
-    }
-
-    public void visit(BiConsumer<Integer, BaseSpan> consumer) {
-        visitTracker(0, this.root, consumer);
-    }
-
-    public static void visitTracker(int level, BaseSpan item, BiConsumer<Integer, BaseSpan> consumer) {
-        consumer.accept(level, item);
-        for (final BaseSpan child : item.getChildren()) {
-            visitTracker(level + 1, child, consumer);
-        }
     }
 
     private String getFieldFirstGenericTypeName(Field field) {
@@ -246,7 +309,34 @@ public class CodecTracker {
         return "unknown";
     }
 
-    public interface FlattedSpan {
+    private static String mapEntryItemName(@Nullable MapEntryItemType type) {
+        if (type == null) {
+            return ".item";
+        }
+        return "." + type.name().toLowerCase();
     }
 
+    public final class TemporaryBufferScope implements AutoCloseable {
+        private final int previousCursor;
+        private boolean closed;
+
+        private TemporaryBufferScope(int previousCursor) {
+            this.previousCursor = previousCursor;
+        }
+
+        @Override
+        public void close() {
+            if (!this.closed) {
+                CodecTracker.this.recorder.endTemporaryBuffer(this.previousCursor);
+                this.closed = true;
+            }
+        }
+    }
+
+    public enum MapEntryItemType {
+        KEY, VALUE, VALUE_LENGTH
+    }
+
+    public interface FlattedSpan {
+    }
 }

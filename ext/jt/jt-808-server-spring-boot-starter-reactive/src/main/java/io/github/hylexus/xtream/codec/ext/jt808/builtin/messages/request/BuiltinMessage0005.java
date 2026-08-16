@@ -32,15 +32,15 @@ import java.util.StringJoiner;
 public class BuiltinMessage0005 {
 
     // byte[0,2)    原始消息流水号
-    @Preset.JtStyle.Word
+    @Preset.JtStyle.Word(desc = "原始消息流水号")
     private int originalMessageFlowId;
 
     // byte[2,4)    重传包总数
-    @Preset.JtStyle.Word
+    @Preset.JtStyle.Word(desc = "重传包总数")
     private int packageCount;
 
     // byte[4, 2n)    重传包 ID 列表
-    @Preset.JtStyle.List
+    @Preset.JtStyle.List(desc = "重传包 ID 列表")
     private List<WordWrapper> packageIdList;
 
     public int getOriginalMessageFlowId() {

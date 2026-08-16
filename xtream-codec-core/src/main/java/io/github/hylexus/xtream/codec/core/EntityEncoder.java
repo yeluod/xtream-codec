@@ -22,6 +22,7 @@ import io.github.hylexus.xtream.codec.common.bean.EncodedLengthPlan;
 import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
 import io.github.hylexus.xtream.codec.core.impl.DefaultSerializeContext;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.type.simple.DataField;
 import io.github.hylexus.xtream.codec.core.utils.XtreamFieldUtils;
@@ -143,16 +144,27 @@ public class EntityEncoder {
         }
         final FieldCodec.SerializeContext context = new DefaultSerializeContext(this.bufferFactory, this, instance, version, this.beanMetadataRegistry, tracker);
         final int indexBeforeWrite = target.writerIndex();
-        if (tracker.getRootSpan().getEntityClass() == null) {
-            tracker.getRootSpan().setEntityClass(beanMetadata.getRawType().getName());
+        final boolean rootInvocation = !tracker.isTracing();
+        if (rootInvocation) {
+            tracker.beginEncode(indexBeforeWrite, beanMetadata.getRawType().getName());
         }
-        final List<BeanPropertyMetadata> props = beanMetadata.getPropertyMetadataList();
-        if (beanMetadata.hasEncodedLengthField()) {
-            encodeFieldsWithEncodedLength(props, beanMetadata, instance, target, context, TRACKED, Objects.requireNonNull(beanMetadata.getEncodedLengthPlan()));
-        } else {
-            encodeFieldsNorm(props, beanMetadata, instance, target, context, TRACKED);
+        try {
+            final List<BeanPropertyMetadata> props = beanMetadata.getPropertyMetadataList();
+            if (beanMetadata.hasEncodedLengthField()) {
+                encodeFieldsWithEncodedLength(props, beanMetadata, instance, target, context, TRACKED, Objects.requireNonNull(beanMetadata.getEncodedLengthPlan()));
+            } else {
+                encodeFieldsNorm(props, beanMetadata, instance, target, context, TRACKED);
+            }
+            if (rootInvocation) {
+                final String hexString = FormatUtils.toHexString(target, indexBeforeWrite, target.writerIndex() - indexBeforeWrite);
+                tracker.finishTrace(hexString, target.writerIndex());
+            }
+        } catch (RuntimeException | Error e) {
+            if (rootInvocation) {
+                tracker.recordFailure(e, target.writerIndex());
+            }
+            throw e;
         }
-        tracker.getRootSpan().setHexString(FormatUtils.toHexString(target, indexBeforeWrite, target.writerIndex() - indexBeforeWrite));
     }
     // endregion withTracker
 
@@ -252,6 +264,8 @@ public class EntityEncoder {
         private boolean placeholderWritten;
         // 范围长度是否已经完成回填
         private boolean closed;
+        private @Nullable CodecTracker codecTracker;
+        private @Nullable CodecTraceNode placeholderSpan;
 
         private EncodedLengthRuntime(EncodedLengthPlan plan) {
             this.plan = plan;
@@ -280,6 +294,8 @@ public class EntityEncoder {
         void writePlaceholder(BeanPropertyMetadata pm, ByteBuf target, FieldCodec.SerializeContext context, FieldEncoder encoder) {
             this.placeholderStart = target.writerIndex();
             encoder.encode(pm, context, target, 0);
+            this.codecTracker = context.codecTracker();
+            this.placeholderSpan = this.codecTracker == null ? null : this.codecTracker.getCurrentSpan().getChildren().getLast();
             context.evaluationContext().setVariable(pm.name(), 0);
             this.placeholderWritten = true;
             if (this.plan.fromFieldIndex() < 0) {
@@ -302,7 +318,20 @@ public class EntityEncoder {
         private void backfill(ByteBuf target, int rangeEnd) {
             final int encodedLength = rangeEnd - this.rangeStart;
             this.plan.writer().write(target, this.placeholderStart, encodedLength);
+            if (this.codecTracker != null && this.placeholderSpan != null) {
+                final int lengthFieldByteCount = lengthFieldByteCount(this.plan.writer());
+                final String hexString = FormatUtils.toHexString(target, this.placeholderStart, lengthFieldByteCount);
+                this.codecTracker.updateSpan(this.placeholderSpan, encodedLength, hexString, this.placeholderStart, this.placeholderStart + lengthFieldByteCount);
+            }
             this.closed = true;
+        }
+
+        private static int lengthFieldByteCount(EncodedLengthPlan.Writer writer) {
+            return switch (writer.maxValue()) {
+                case 0xFF -> 1;
+                case 0xFFFF -> 2;
+                default -> 4;
+            };
         }
     }
 

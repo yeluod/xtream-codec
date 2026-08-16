@@ -26,7 +26,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 class CodecDebugEntity03Test {
     EntityCodec entityCodec = EntityCodec.DEFAULT;
@@ -54,11 +53,11 @@ class CodecDebugEntity03Test {
     }
 
     private void doCompare(CodecTracker tracker, CodecDebugEntity03 original) {
-        final RootSpan rootSpan = tracker.getRootSpan();
+        final CodecTraceNode rootSpan = tracker.getTrace().getRoot();
         assertEquals(3, rootSpan.getChildren().size());
-        assertEquals(original.getFlowId(), ((BasicFieldSpan) rootSpan.getChildren().get(0)).getValue());
-        assertEquals(original.getMultimediaDataItemCount(), ((BasicFieldSpan) rootSpan.getChildren().get(1)).getValue());
-        assertInstanceOf(CollectionFieldSpan.class, rootSpan.getChildren().get(2));
+        assertEquals(original.getFlowId(), rootSpan.getChildren().get(0).getValue());
+        assertEquals(original.getMultimediaDataItemCount(), rootSpan.getChildren().get(1).getValue());
+        assertEquals(CodecTraceNodeKind.COLLECTION, rootSpan.getChildren().get(2).getKind());
         assertEquals(2, rootSpan.getChildren().get(2).getChildren().size());
     }
 

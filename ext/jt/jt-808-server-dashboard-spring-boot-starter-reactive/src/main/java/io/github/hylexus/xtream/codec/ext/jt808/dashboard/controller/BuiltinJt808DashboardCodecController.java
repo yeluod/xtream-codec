@@ -57,12 +57,6 @@ public class BuiltinJt808DashboardCodecController {
         return this.codecService.getCodecOptions();
     }
 
-    @PostMapping("/encode-with-entity")
-    public List<Jt808MessageDescriber.Tracker> encode(@Validated @RequestBody EncodeMessageDto dto) {
-        dto.setTerminalId(this.convertTerminalId(dto.getTerminalId(), dto.getVersion()));
-        return this.codecService.encodeWithTracker(dto);
-    }
-
     @GetMapping("/codec-metadata")
     public PageableVo<FieldCodecRegistry.CodecDescriptor> codecDescriptors(@Validated CodecMetadataDto dto) {
         final FieldCodecRegistry codecRegistry = this.beanMetadataRegistry.getFieldCodecRegistry();
@@ -161,8 +155,14 @@ public class BuiltinJt808DashboardCodecController {
         }
     }
 
+    @PostMapping("/encode-with-entity")
+    public List<Jt808MessageDescriber.Tracker> encodeWithEntity(@Validated @RequestBody EncodeMessageDto dto) {
+        dto.setTerminalId(this.convertTerminalId(dto.getTerminalId(), dto.getVersion()));
+        return this.codecService.encodeWithTracker(dto);
+    }
+
     @PostMapping("/decode-with-entity")
-    public DecodedMessageVo decode(@Validated @RequestBody DecodeMessageDto dto) {
+    public DecodedMessageVo decodeWithEntity(@Validated @RequestBody DecodeMessageDto dto) {
         final List<String> list = dto.getHexString().stream()
                 .filter(Objects::nonNull)
                 .map(s -> s.replace(" ", ""))

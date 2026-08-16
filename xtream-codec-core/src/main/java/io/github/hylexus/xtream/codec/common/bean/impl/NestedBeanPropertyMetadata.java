@@ -19,14 +19,12 @@ package io.github.hylexus.xtream.codec.common.bean.impl;
 import io.github.hylexus.xtream.codec.common.bean.BeanMetadata;
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
 import io.github.hylexus.xtream.codec.common.bean.FieldLengthExtractor;
-import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.core.BeanMetadataRegistry;
 import io.github.hylexus.xtream.codec.core.ContainerInstanceFactory;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
 import io.github.hylexus.xtream.codec.core.impl.DefaultDeserializeContext;
 import io.github.hylexus.xtream.codec.core.impl.DefaultSerializeContext;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
-import io.github.hylexus.xtream.codec.core.tracker.NestedFieldSpan;
 import io.github.hylexus.xtream.codec.core.utils.BeanUtils;
 import io.github.hylexus.xtream.codec.core.utils.XtreamFieldUtils;
 import io.netty.buffer.ByteBuf;
@@ -78,20 +76,32 @@ public class NestedBeanPropertyMetadata extends BasicBeanPropertyMetadata {
         final Object instance = nestedBeanMetadata.createNewInstanceForDecoding();
         final int length = this.fieldLengthExtractor().extractFieldLengthWithTracker(context, context.evaluationContext(), input);
 
+        final int inputReaderIndexBeforeSlice = input.readerIndex();
         final ByteBuf slice = length < 0
                 ? input // all remaining
                 : input.readSlice(length);
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        final NestedFieldSpan nestedFieldSpan = codecTracker.startNewNestedFieldSpan(this, this.getClass().getSimpleName(), null);
-        final int indexBeforeRead = slice.readerIndex();
+        codecTracker.startNewNestedFieldSpan(this, this.getClass().getSimpleName(), null);
         final FieldCodec.DeserializeContext newContext = new DefaultDeserializeContext(context, instance);
         final Object result;
-        if (!nestedBeanMetadata.getRawType().isRecord()) {
-            result = this.decodePojoFields(newContext, slice, instance, true);
+        if (length < 0) {
+            if (!nestedBeanMetadata.getRawType().isRecord()) {
+                result = this.decodePojoFields(newContext, slice, instance, true);
+            } else {
+                result = this.decodeRecordFields(newContext, slice, instance, true);
+            }
         } else {
-            result = this.decodeRecordFields(newContext, slice, instance, true);
+            codecTracker.pushCoordinateBase(inputReaderIndexBeforeSlice);
+            try {
+                if (!nestedBeanMetadata.getRawType().isRecord()) {
+                    result = this.decodePojoFields(newContext, slice, instance, true);
+                } else {
+                    result = this.decodeRecordFields(newContext, slice, instance, true);
+                }
+            } finally {
+                codecTracker.popCoordinateBase();
+            }
         }
-        nestedFieldSpan.setHexString(FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead));
         codecTracker.finishCurrentSpan();
         return result;
     }
@@ -171,8 +181,7 @@ public class NestedBeanPropertyMetadata extends BasicBeanPropertyMetadata {
     protected void doEncodeWithTracker(FieldCodec.SerializeContext context, ByteBuf output, Object value) {
         final DefaultSerializeContext newContext = new DefaultSerializeContext(context, value);
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        final NestedFieldSpan nestedFieldSpan = codecTracker.startNewNestedFieldSpan(this, this.getClass().getSimpleName(), null);
-        final int indexBeforeWrite = output.writerIndex();
+        codecTracker.startNewNestedFieldSpan(this, this.getClass().getSimpleName(), null);
         for (final BeanPropertyMetadata pm : this.nestedBeanMetadata.getPropertyMetadataList()) {
             if (pm.isDerived() || !pm.conditionEvaluator().evaluate(newContext)) {
                 newContext.evaluationContext().setVariable(pm.name(), null);
@@ -182,7 +191,6 @@ public class NestedBeanPropertyMetadata extends BasicBeanPropertyMetadata {
             pm.encodePropertyValueWithTracker(newContext, output, nestedValue);
             newContext.evaluationContext().setVariable(pm.name(), nestedValue);
         }
-        nestedFieldSpan.setHexString(FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite));
         codecTracker.finishCurrentSpan();
     }
 

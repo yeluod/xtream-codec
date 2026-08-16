@@ -18,29 +18,18 @@ package io.github.hylexus.xtream.codec.core.tracker;
 
 import org.jspecify.annotations.Nullable;
 
-import java.util.StringJoiner;
-
-public class RootSpan extends BaseSpan {
-    private @Nullable String entityClass;
-
-    public RootSpan() {
-        super(null);
-    }
-
-    public @Nullable String getEntityClass() {
-        return entityClass;
-    }
-
-    public RootSpan setEntityClass(String entityClass) {
-        this.entityClass = entityClass;
-        return this;
-    }
-
-    @Override
-    public String toString() {
-        return new StringJoiner(", ", RootSpan.class.getSimpleName() + "[", "]")
-                .add("entityClass='" + entityClass + "'")
-                .add("hexString='" + hexString + "'")
-                .toString();
-    }
+/**
+ * 编解码跟踪诊断信息。
+ *
+ * @author hylexus
+ * @author Codex (AI)
+ * @since 0.9.0
+ */
+public record CodecTraceDiagnostic(
+        String level,
+        String message,
+        @Nullable String nodeId,
+        @Nullable Integer byteOffset,
+        @Nullable String exceptionType
+) {
 }

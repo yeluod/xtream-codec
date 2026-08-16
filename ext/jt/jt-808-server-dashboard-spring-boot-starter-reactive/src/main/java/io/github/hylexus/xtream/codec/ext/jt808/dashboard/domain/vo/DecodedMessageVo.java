@@ -16,7 +16,7 @@
 
 package io.github.hylexus.xtream.codec.ext.jt808.dashboard.domain.vo;
 
-import io.github.hylexus.xtream.codec.core.tracker.RootSpan;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceView;
 
 import java.util.List;
 
@@ -53,7 +53,7 @@ public class DecodedMessageVo {
     public static class Single {
         private String rawHexString;
         private String escapedHexString;
-        private RootSpan details;
+        private CodecTraceView details;
 
         public String getRawHexString() {
             return rawHexString;
@@ -73,11 +73,11 @@ public class DecodedMessageVo {
             return this;
         }
 
-        public RootSpan getDetails() {
+        public CodecTraceView getDetails() {
             return details;
         }
 
-        public Single setDetails(RootSpan details) {
+        public Single setDetails(CodecTraceView details) {
             this.details = details;
             return this;
         }
@@ -89,7 +89,7 @@ public class DecodedMessageVo {
     public static class Multiple {
         private List<SubPackageMetadata> subPackageMetadata;
         private String mergedHexString;
-        private RootSpan details;
+        private CodecTraceView details;
 
         public List<SubPackageMetadata> getSubPackageMetadata() {
             return subPackageMetadata;
@@ -109,11 +109,11 @@ public class DecodedMessageVo {
             return this;
         }
 
-        public RootSpan getDetails() {
+        public CodecTraceView getDetails() {
             return details;
         }
 
-        public Multiple setDetails(RootSpan details) {
+        public Multiple setDetails(CodecTraceView details) {
             this.details = details;
             return this;
         }
