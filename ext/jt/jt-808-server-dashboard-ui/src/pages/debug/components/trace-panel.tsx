@@ -1,7 +1,8 @@
+import type { PointerEvent as ReactPointerEvent } from "react";
+
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Chip, Tooltip } from "@heroui/react";
 import clsx from "clsx";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
 
 import {
   chunkBytes,
@@ -101,14 +102,28 @@ export const TracePanel = ({
     [trace?.payloadHex],
   );
   const payloadRows = useMemo(() => chunkBytes(payloadBytes), [payloadBytes]);
+  const initialFailureNode = useMemo(() => {
+    const diagnostic = trace?.diagnostics.find(
+      (item) => item.nodeId && nodeMap.has(item.nodeId),
+    );
+
+    return diagnostic?.nodeId ? nodeMap.get(diagnostic.nodeId) : undefined;
+  }, [nodeMap, trace?.diagnostics]);
 
   useEffect(() => {
-    setSelectedNodeId(undefined);
-    setSelectedByteOffset(undefined);
+    setSelectedNodeId(initialFailureNode?.id);
+    setSelectedByteOffset(initialFailureNode?.byteStart ?? undefined);
     setCollapsedNodeIds(new Set());
-    setTraceScrollTarget(undefined);
+    setTraceScrollTarget(
+      initialFailureNode
+        ? {
+            nodeId: initialFailureNode.id,
+            serial: 1,
+          }
+        : undefined,
+    );
     setCopyState("idle");
-  }, [trace?.root?.id]);
+  }, [initialFailureNode, trace?.root?.id]);
 
   useEffect(() => {
     return () => {
@@ -437,7 +452,7 @@ export const TracePanel = ({
             <span>节点</span>
             <span>类型</span>
             <span>范围</span>
-            <span>值 / Codec</span>
+            <span>值 / 处理器</span>
           </div>
           {currentTrace.root ? (
             <TraceNodeView
@@ -458,7 +473,7 @@ export const TracePanel = ({
   const renderPayloadSection = (fullscreen = false) => (
     <section
       className={clsx(
-        "overflow-hidden rounded-2xl border border-border/60 bg-background-secondary/45 shadow-[inset_0_1px_0_rgb(255_255_255/0.035)]",
+        "@container overflow-hidden rounded-2xl border border-border/60 bg-background-secondary/45 shadow-[inset_0_1px_0_rgb(255_255_255/0.035)]",
         fullscreen ? "flex min-h-0 flex-col rounded-xl" : "xl:col-span-2",
       )}
     >
@@ -532,12 +547,12 @@ export const TracePanel = ({
         className={clsx(
           "grid items-stretch gap-3 bg-background-tertiary/45 p-3",
           fullscreen
-            ? "min-h-0 flex-1 overflow-auto xl:grid-cols-[minmax(0,1fr)_340px]"
-            : "lg:grid-cols-[minmax(0,1fr)_340px]",
+            ? "min-h-0 flex-1 overflow-auto @min-[900px]:grid-cols-[minmax(0,1fr)_minmax(580px,58%)]"
+            : "@min-[960px]:grid-cols-[minmax(0,1fr)_340px] @min-[1160px]:grid-cols-[minmax(0,1fr)_minmax(560px,52%)]",
         )}
       >
         <div className="h-full min-h-0 overflow-auto">
-          <div className="relative min-w-150 space-y-1.5 font-mono text-xs">
+          <div className="relative min-w-[624px] space-y-1.5 font-mono text-xs">
             {payloadRows.length > 0 ? (
               <>
                 <div className="absolute bottom-0 left-9 top-0 w-px bg-border/70" />
@@ -545,12 +560,15 @@ export const TracePanel = ({
                   <div className="pr-2">
                     <div className="size-7" />
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pl-2">
+                  <div className="flex items-center gap-x-4 pl-2">
                     {chunkBytes(
                       Array.from({ length: 16 }, (_, index) => index),
                       4,
                     ).map((group) => (
-                      <div key={group[0]} className="grid grid-cols-4 gap-1.5">
+                      <div
+                        key={group[0]}
+                        className="grid shrink-0 grid-cols-4 gap-1.5"
+                      >
                         {group.map((index) => (
                           <span
                             key={index}
@@ -577,11 +595,11 @@ export const TracePanel = ({
                           {rowStart.toString(16).padStart(2, "0")}
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pl-2">
+                      <div className="flex items-center gap-x-4 pl-2">
                         {byteGroups.map((group) => (
                           <div
                             key={group[0]?.index}
-                            className="grid grid-cols-4 gap-1.5"
+                            className="grid shrink-0 grid-cols-4 gap-1.5"
                           >
                             {group.map(({ index, byte }) => {
                               const isInSelectedRange =
@@ -629,7 +647,7 @@ export const TracePanel = ({
         <div
           className={clsx(
             "min-w-0",
-            fullscreen ? "w-full max-w-[360px] justify-self-end" : "",
+            fullscreen ? "w-full justify-self-end" : "",
           )}
         >
           <BytePreviewPanel bytes={selectedBytes} range={selectedRange} />

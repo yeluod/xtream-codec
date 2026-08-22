@@ -30,7 +30,7 @@ import java.nio.charset.Charset;
  * @author hylexus
  */
 @JsonSerialize(using = XtreamCodecDebugJsonSerializer.class)
-public interface DataWrapper<T> extends FieldCodecRegistry.AtomicDataType, CodecTracker.FlattedSpan {
+public interface DataWrapper<T> extends FieldCodecRegistry.AtomicDataType, CodecTracker.FlattenedTrace {
 
     void writeTo(ByteBuf output);
 

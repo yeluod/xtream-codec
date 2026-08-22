@@ -3,10 +3,10 @@ import clsx from "clsx";
 
 import {
   chipColor,
-  codecChipColor,
   getNodeFieldDescription,
   getNodeLabel,
   kindTone,
+  processorChipClass,
   sortTraceChildrenByRange,
   toneDotClass,
 } from "../debug-utils";
@@ -31,6 +31,8 @@ export const TraceNodeView = ({
 }) => {
   const tone = kindTone(node.kind);
   const isSelected = selectedNodeId === node.id;
+  const isError = node.status === "ERROR";
+  const isFailureNode = node.diagnostics.length > 0;
   const range =
     node.byteStart != null && node.byteEnd != null
       ? `${node.byteStart}-${node.byteEnd}`
@@ -45,10 +47,20 @@ export const TraceNodeView = ({
       <div className="relative">
         <button
           className={clsx(
-            "grid w-full min-w-190 grid-cols-[minmax(240px,1.2fr)_116px_92px_minmax(180px,1fr)] items-center gap-3 border-b border-border/40 px-3 py-2 text-left transition-colors",
-            isSelected ? "bg-accent/12" : "hover:bg-background-secondary/70",
+            "grid w-full min-w-190 grid-cols-[minmax(240px,1.2fr)_116px_92px_minmax(180px,1fr)] items-center gap-3 border-b px-3 py-2 text-left transition-colors",
+            isFailureNode
+              ? "border-rose-500/20 bg-rose-500/10 shadow-[inset_3px_0_0_rgb(244_63_94/0.9)] hover:bg-rose-500/15"
+              : isError
+                ? "border-border/40 bg-rose-500/4 hover:bg-rose-500/8"
+                : "border-border/40 hover:bg-background-secondary/70",
+            isSelected &&
+              (isFailureNode
+                ? "bg-rose-500/18 ring-1 ring-inset ring-rose-400/35"
+                : "bg-accent/12"),
           )}
           data-trace-node-id={node.id}
+          data-trace-node-status={node.status}
+          title={isFailureNode ? node.diagnostics[0]?.message : undefined}
           type="button"
           onClick={() => onSelectNode(node)}
         >
@@ -59,11 +71,18 @@ export const TraceNodeView = ({
             <span
               className={clsx(
                 "size-2 shrink-0 rounded-full",
-                toneDotClass(tone),
+                isFailureNode
+                  ? "bg-rose-400 shadow-[0_0_8px_rgb(244_63_94/0.8)]"
+                  : toneDotClass(tone),
               )}
             />
             <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-mono text-xs font-semibold text-foreground">
+              <span
+                className={clsx(
+                  "truncate font-mono text-xs font-semibold",
+                  isFailureNode ? "text-rose-200" : "text-foreground",
+                )}
+              >
                 {getNodeLabel(node)}
               </span>
               {fieldDescription ? (
@@ -80,18 +99,37 @@ export const TraceNodeView = ({
           </span>
           <span className="font-mono text-xs text-muted">{range}</span>
           <span className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
-              {node.valueSummary ?? node.status}
-            </span>
-            {node.codecType ? (
+            {isFailureNode ? (
               <Chip
-                className="max-w-52 shrink-0"
-                color={codecChipColor(node.codecType)}
+                className="shrink-0"
+                color="danger"
+                size="sm"
+                variant="soft"
+              >
+                编解码失败
+              </Chip>
+            ) : (
+              <span
+                className={clsx(
+                  "min-w-0 flex-1 truncate font-mono text-xs",
+                  isError ? "font-semibold text-rose-300" : "text-foreground",
+                )}
+              >
+                {node.valueSummary ?? "-"}
+              </span>
+            )}
+            {node.processorType ? (
+              <Chip
+                className={clsx(
+                  "max-w-52 shrink-0",
+                  processorChipClass(node.processorType),
+                )}
+                color="default"
                 size="sm"
                 variant="soft"
               >
                 <span className="block max-w-44 truncate font-mono text-[10px]">
-                  {node.codecType}
+                  {node.processorType}
                 </span>
               </Chip>
             ) : null}

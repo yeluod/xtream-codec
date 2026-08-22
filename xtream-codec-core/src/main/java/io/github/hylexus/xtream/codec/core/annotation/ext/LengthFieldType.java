@@ -17,6 +17,7 @@
 package io.github.hylexus.xtream.codec.core.annotation.ext;
 
 import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.type.XtreamDataType;
 import io.netty.buffer.ByteBuf;
@@ -41,7 +42,9 @@ public enum LengthFieldType {
         final int writerIndex = output.writerIndex();
         this.writeTo(output, value);
         final String hexString = FormatUtils.toHexString(output, writerIndex, output.writerIndex() - writerIndex);
-        codecTracker.addFieldSpan(codecTracker.getCurrentSpan(), fieldName, value, hexString, this.getDeclaringClass().getSimpleName(), "");
+        try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.LENGTH_FIELD, fieldName, long.class.getTypeName(), this.getDeclaringClass().getSimpleName(), "", writerIndex)) {
+            scope.complete(value, hexString, output.writerIndex());
+        }
     }
 
     public void writeTo(ByteBuf output, long value) {
@@ -58,7 +61,9 @@ public enum LengthFieldType {
         final int readerIndex = input.readerIndex();
         final Number number = this.readFrom(input);
         final String hexString = FormatUtils.toHexString(input, readerIndex, input.readerIndex() - readerIndex);
-        codecTracker.addFieldSpan(codecTracker.getCurrentSpan(), fieldName, number, hexString, LengthFieldType.class.getSimpleName(), "");
+        try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.LENGTH_FIELD, fieldName, Number.class.getTypeName(), LengthFieldType.class.getSimpleName(), "", readerIndex)) {
+            scope.complete(number, hexString, input.readerIndex());
+        }
         return number;
     }
 

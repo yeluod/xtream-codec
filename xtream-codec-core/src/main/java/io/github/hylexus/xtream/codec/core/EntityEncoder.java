@@ -22,7 +22,6 @@ import io.github.hylexus.xtream.codec.common.bean.EncodedLengthPlan;
 import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
 import io.github.hylexus.xtream.codec.core.impl.DefaultSerializeContext;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.type.simple.DataField;
 import io.github.hylexus.xtream.codec.core.utils.XtreamFieldUtils;
@@ -151,7 +150,7 @@ public class EntityEncoder {
         try {
             final List<BeanPropertyMetadata> props = beanMetadata.getPropertyMetadataList();
             if (beanMetadata.hasEncodedLengthField()) {
-                encodeFieldsWithEncodedLength(props, beanMetadata, instance, target, context, TRACKED, Objects.requireNonNull(beanMetadata.getEncodedLengthPlan()));
+                encodeFieldsWithEncodedLength(props, beanMetadata, instance, target, context, TRACKED, new TrackedEncodedLengthRuntime(Objects.requireNonNull(beanMetadata.getEncodedLengthPlan()), tracker));
             } else {
                 encodeFieldsNorm(props, beanMetadata, instance, target, context, TRACKED);
             }
@@ -205,7 +204,10 @@ public class EntityEncoder {
     }
 
     private static void encodeFieldsWithEncodedLength(List<BeanPropertyMetadata> props, BeanMetadata beanMetadata, Object instance, ByteBuf target, FieldCodec.SerializeContext context, FieldEncoder encoder, EncodedLengthPlan plan) {
-        final EncodedLengthRuntime runtime = new EncodedLengthRuntime(plan);
+        encodeFieldsWithEncodedLength(props, beanMetadata, instance, target, context, encoder, new NormalEncodedLengthRuntime(plan));
+    }
+
+    private static void encodeFieldsWithEncodedLength(List<BeanPropertyMetadata> props, BeanMetadata beanMetadata, Object instance, ByteBuf target, FieldCodec.SerializeContext context, FieldEncoder encoder, EncodedLengthRuntime runtime) {
         for (int i = 0; i < props.size(); i++) {
             final BeanPropertyMetadata pm = props.get(i);
             runtime.beforeField(i, target);
@@ -254,21 +256,31 @@ public class EntityEncoder {
      * 在范围结束位置或实体编码结束时完成回填。范围长度通过 {@code writerIndex} 的差值计算，
      * 因此会自然排除被条件表达式或 {@code null} 值跳过的字段。
      */
-    private static final class EncodedLengthRuntime {
-        private final EncodedLengthPlan plan;
+    private abstract static class EncodedLengthRuntime {
+        final EncodedLengthPlan plan;
         // 长度字段占位值在 ByteBuf 中的起始位置
-        private int placeholderStart = -1;
+        int placeholderStart = -1;
         // 被统计范围的起始位置
         private int rangeStart = -1;
         // 长度字段是否已经实际写入占位值
         private boolean placeholderWritten;
         // 范围长度是否已经完成回填
         private boolean closed;
-        private @Nullable CodecTracker codecTracker;
-        private @Nullable CodecTraceNode placeholderSpan;
 
         private EncodedLengthRuntime(EncodedLengthPlan plan) {
             this.plan = plan;
+        }
+
+        void beforePlaceholderEncode(FieldCodec.SerializeContext context) {
+            // 普通编码不需要记录长度字段的追踪节点。
+        }
+
+        void afterPlaceholderEncode(FieldCodec.SerializeContext context) {
+            // 普通编码不需要记录长度字段的追踪节点。
+        }
+
+        void afterBackfill(ByteBuf target, int encodedLength) {
+            // 普通编码不需要更新长度字段的追踪节点。
         }
 
         /**
@@ -293,9 +305,9 @@ public class EntityEncoder {
          */
         void writePlaceholder(BeanPropertyMetadata pm, ByteBuf target, FieldCodec.SerializeContext context, FieldEncoder encoder) {
             this.placeholderStart = target.writerIndex();
+            this.beforePlaceholderEncode(context);
             encoder.encode(pm, context, target, 0);
-            this.codecTracker = context.codecTracker();
-            this.placeholderSpan = this.codecTracker == null ? null : this.codecTracker.getCurrentSpan().getChildren().getLast();
+            this.afterPlaceholderEncode(context);
             context.evaluationContext().setVariable(pm.name(), 0);
             this.placeholderWritten = true;
             if (this.plan.fromFieldIndex() < 0) {
@@ -318,21 +330,55 @@ public class EntityEncoder {
         private void backfill(ByteBuf target, int rangeEnd) {
             final int encodedLength = rangeEnd - this.rangeStart;
             this.plan.writer().write(target, this.placeholderStart, encodedLength);
-            if (this.codecTracker != null && this.placeholderSpan != null) {
-                final int lengthFieldByteCount = lengthFieldByteCount(this.plan.writer());
-                final String hexString = FormatUtils.toHexString(target, this.placeholderStart, lengthFieldByteCount);
-                this.codecTracker.updateSpan(this.placeholderSpan, encodedLength, hexString, this.placeholderStart, this.placeholderStart + lengthFieldByteCount);
-            }
+            this.afterBackfill(target, encodedLength);
             this.closed = true;
         }
 
-        private static int lengthFieldByteCount(EncodedLengthPlan.Writer writer) {
+        static int lengthFieldByteCount(EncodedLengthPlan.Writer writer) {
             return switch (writer.maxValue()) {
                 case 0xFF -> 1;
                 case 0xFFFF -> 2;
                 default -> 4;
             };
         }
+    }
+
+    private static final class NormalEncodedLengthRuntime extends EncodedLengthRuntime {
+        private NormalEncodedLengthRuntime(EncodedLengthPlan plan) {
+            super(plan);
+        }
+    }
+
+    private static final class TrackedEncodedLengthRuntime extends EncodedLengthRuntime {
+        private final CodecTracker tracker;
+        private CodecTracker.@Nullable TraceCheckpoint checkpoint;
+        private CodecTracker.@Nullable DeferredNode placeholderNode;
+
+        private TrackedEncodedLengthRuntime(EncodedLengthPlan plan, CodecTracker tracker) {
+            super(plan);
+            this.tracker = tracker;
+        }
+
+        @Override
+        void beforePlaceholderEncode(FieldCodec.SerializeContext context) {
+            this.checkpoint = this.tracker.checkpoint();
+        }
+
+        @Override
+        void afterPlaceholderEncode(FieldCodec.SerializeContext context) {
+            this.placeholderNode = Objects.requireNonNull(this.checkpoint).requireSingleNode();
+        }
+
+        @Override
+        void afterBackfill(ByteBuf target, int encodedLength) {
+            if (this.placeholderNode == null) {
+                return;
+            }
+            final int lengthFieldByteCount = lengthFieldByteCount(this.plan.writer());
+            final String hexString = FormatUtils.toHexString(target, this.placeholderStart, lengthFieldByteCount);
+            this.placeholderNode.update(encodedLength, hexString, this.placeholderStart, this.placeholderStart + lengthFieldByteCount);
+        }
+
     }
 
 }

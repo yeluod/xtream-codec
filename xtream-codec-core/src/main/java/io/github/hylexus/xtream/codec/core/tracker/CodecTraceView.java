@@ -39,7 +39,7 @@ public record CodecTraceView(
     public static CodecTraceView from(CodecTrace trace) {
         final List<Node> nodes = new ArrayList<>();
         final Map<Integer, List<String>> nodeIdsByByteOffset = new LinkedHashMap<>();
-        final Node root = toViewNode(trace.getRoot(), nodes, nodeIdsByByteOffset);
+        final Node root = toViewNode(trace.getRoot(), trace.getPayloadHex(), nodes, nodeIdsByByteOffset);
         return new CodecTraceView(
                 trace.getDirection(),
                 trace.getEntityClass(),
@@ -51,7 +51,7 @@ public record CodecTraceView(
         );
     }
 
-    private static Node toViewNode(CodecTraceNode source, List<Node> nodes, Map<Integer, List<String>> nodeIdsByByteOffset) {
+    private static Node toViewNode(CodecTraceNode source, @Nullable String payloadHex, List<Node> nodes, Map<Integer, List<String>> nodeIdsByByteOffset) {
         final List<Node> children = new ArrayList<>();
         final Node node = new Node(
                 source.getId(),
@@ -60,12 +60,12 @@ public record CodecTraceView(
                 source.getName(),
                 source.getPath(),
                 source.getJavaType(),
-                source.getCodecType(),
+                source.getProcessorType(),
                 CodecTraceValueRenderer.toJsonValue(source.getValue()),
                 source.getValueSummary(),
                 source.getByteStart(),
                 source.getByteEnd(),
-                source.getHex(),
+                resolveHex(source, payloadHex),
                 source.getStatus(),
                 Map.copyOf(source.getAttributes()),
                 List.copyOf(source.getDiagnostics()),
@@ -74,9 +74,23 @@ public record CodecTraceView(
         nodes.add(node);
         indexByteRange(source, nodeIdsByByteOffset);
         for (final CodecTraceNode child : source.getChildren()) {
-            children.add(toViewNode(child, nodes, nodeIdsByByteOffset));
+            children.add(toViewNode(child, payloadHex, nodes, nodeIdsByByteOffset));
         }
         return node;
+    }
+
+    private static @Nullable String resolveHex(CodecTraceNode source, @Nullable String payloadHex) {
+        if (source.getHex() != null || payloadHex == null) {
+            return source.getHex();
+        }
+        final Integer byteStart = source.getByteStart();
+        final Integer byteEnd = source.getByteEnd();
+        final int start = byteStart == null ? -1 : byteStart * 2;
+        final int end = byteEnd == null ? -1 : byteEnd * 2;
+        if (start < 0 || end < start || end > payloadHex.length()) {
+            return null;
+        }
+        return payloadHex.substring(start, end);
     }
 
     private static void indexByteRange(CodecTraceNode source, Map<Integer, List<String>> nodeIdsByByteOffset) {
@@ -103,7 +117,7 @@ public record CodecTraceView(
             String name,
             @Nullable String path,
             @Nullable String javaType,
-            @Nullable String codecType,
+            @Nullable String processorType,
             @Nullable Object value,
             @Nullable String valueSummary,
             @Nullable Integer byteStart,

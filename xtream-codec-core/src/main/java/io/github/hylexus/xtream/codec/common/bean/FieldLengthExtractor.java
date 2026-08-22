@@ -21,7 +21,7 @@ import io.github.hylexus.xtream.codec.base.expression.XtreamExpression;
 import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
 import io.github.hylexus.xtream.codec.core.annotation.PrependLengthFieldType;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.netty.buffer.ByteBuf;
 
@@ -65,9 +65,10 @@ public sealed interface FieldLengthExtractor
             final int indexBeforeRead = input.readerIndex();
             final int value = this.prependLengthFieldType.readFrom(input);
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            final CodecTraceNode currentSpan = codecTracker.getCurrentSpan();
             final String hexString = FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead);
-            codecTracker.addPrependLengthFieldSpan(currentSpan, "prependLengthField", value, hexString, this.prependLengthFieldType.name(), "前置长度字段");
+            try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.LENGTH_FIELD, "prependLengthField", int.class.getTypeName(), this.prependLengthFieldType.name(), "前置长度字段", indexBeforeRead)) {
+                scope.complete(value, hexString, input.readerIndex());
+            }
             return value;
         }
     }

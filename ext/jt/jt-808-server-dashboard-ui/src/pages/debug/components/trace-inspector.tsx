@@ -94,8 +94,8 @@ export const TraceInspector = ({
               value={selectedNode.valueSummary ?? "-"}
             />
             <TraceDetailCell
-              label="Codec"
-              value={selectedNode.codecType ?? "-"}
+              label="处理器"
+              value={selectedNode.processorType ?? "-"}
             />
             <TraceDetailCell
               label="Java 类型"

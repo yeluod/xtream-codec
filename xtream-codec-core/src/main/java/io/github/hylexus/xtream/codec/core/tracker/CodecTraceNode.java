@@ -34,7 +34,7 @@ public class CodecTraceNode {
     private final String name;
     private final @Nullable String path;
     private @Nullable String javaType;
-    private @Nullable String codecType;
+    private @Nullable String processorType;
     private @Nullable Object value;
     private @Nullable String valueSummary;
     private @Nullable Integer byteStart;
@@ -82,12 +82,12 @@ public class CodecTraceNode {
         return this;
     }
 
-    public @Nullable String getCodecType() {
-        return codecType;
+    public @Nullable String getProcessorType() {
+        return processorType;
     }
 
-    public CodecTraceNode setCodecType(@Nullable String codecType) {
-        this.codecType = codecType;
+    public CodecTraceNode setProcessorType(@Nullable String processorType) {
+        this.processorType = processorType;
         return this;
     }
 
@@ -187,7 +187,7 @@ public class CodecTraceNode {
                 .add("name='" + name + "'")
                 .add("path='" + path + "'")
                 .add("javaType='" + javaType + "'")
-                .add("codecType='" + codecType + "'")
+                .add("processorType='" + processorType + "'")
                 .add("value=" + valueSummary)
                 .add("byteRange=" + byteStart + "-" + byteEnd)
                 .add("hex='" + hex + "'")

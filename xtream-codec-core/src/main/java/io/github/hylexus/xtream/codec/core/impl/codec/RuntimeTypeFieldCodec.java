@@ -25,7 +25,7 @@ import io.github.hylexus.xtream.codec.core.EntityEncoder;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
 import io.github.hylexus.xtream.codec.core.RuntimeTypeSupplier;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.netty.buffer.ByteBuf;
 import org.jspecify.annotations.Nullable;
@@ -91,27 +91,21 @@ public class RuntimeTypeFieldCodec extends AbstractFieldCodec<Object> {
             final ByteBuf slice = length < 0
                     ? input // all remaining
                     : input.readSlice(length);
+            final int sliceStart = slice.readerIndex();
             final BeanMetadata beanMetadata = entityDecoder.getBeanMetadataRegistry().getBeanMetadata(targetClass, context.version());
-            final int parentIndexBeforeRead = slice.readerIndex();
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            final CodecTraceNode nestedFieldSpan = codecTracker.startNewNestedFieldSpan(propertyMetadata, this, targetClass.getTypeName());
-
-            final Object value;
-            if (length < 0) {
-                value = entityDecoder.decodeWithTracker(beanMetadata, slice, codecTracker);
-                codecTracker.updateContainerSpan(nestedFieldSpan, null, FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead), slice.readerIndex());
-            } else {
-                codecTracker.pushCoordinateBase(inputReaderIndexBeforeSlice);
-                try {
+            try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, propertyMetadata.name(), targetClass.getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), inputReaderIndexBeforeSlice)) {
+                final Object value;
+                if (length < 0) {
                     value = entityDecoder.decodeWithTracker(beanMetadata, slice, codecTracker);
-                    codecTracker.updateContainerSpan(nestedFieldSpan, null, FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead), slice.readerIndex());
-                } finally {
-                    codecTracker.popCoordinateBase();
+                } else {
+                    try (final CodecTracker.CoordinateScope ignored = codecTracker.openCoordinateBase(inputReaderIndexBeforeSlice)) {
+                        value = entityDecoder.decodeWithTracker(beanMetadata, slice, codecTracker);
+                    }
                 }
+                scope.complete(value, FormatUtils.toHexString(slice, sliceStart, slice.readerIndex() - sliceStart), input.readerIndex());
+                return value;
             }
-            codecTracker.finishCurrentSpan();
-
-            return value;
         }
     }
 
@@ -154,13 +148,11 @@ public class RuntimeTypeFieldCodec extends AbstractFieldCodec<Object> {
             codec.serializeWithTracker(propertyMetadata, context, output, value);
         } else {
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            final CodecTraceNode nestedFieldSpan = codecTracker.startNewNestedFieldSpan(propertyMetadata, this, targetClass.getTypeName());
-
-            final BeanMetadata beanMetadata = entityEncoder.getBeanMetadataRegistry().getBeanMetadata(targetClass, context.version());
-            entityEncoder.encodeWithTracker(beanMetadata, value, output, codecTracker);
-
-            codecTracker.updateSpan(nestedFieldSpan, null, FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite), parentIndexBeforeWrite, output.writerIndex());
-            codecTracker.finishCurrentSpan();
+            try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, propertyMetadata.name(), targetClass.getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), parentIndexBeforeWrite)) {
+                final BeanMetadata beanMetadata = entityEncoder.getBeanMetadataRegistry().getBeanMetadata(targetClass, context.version());
+                entityEncoder.encodeWithTracker(beanMetadata, value, output, codecTracker);
+                scope.complete(value, FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite), output.writerIndex());
+            }
         }
     }
 

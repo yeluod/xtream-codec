@@ -23,7 +23,7 @@ import io.github.hylexus.xtream.codec.core.ExtendMetaRegistry;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
 import io.github.hylexus.xtream.codec.core.impl.DefaultExtendMetaRegistry;
 import io.github.hylexus.xtream.codec.core.impl.domain.*;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.type.FieldLength;
 import io.github.hylexus.xtream.codec.core.type.TLV;
@@ -124,30 +124,20 @@ public class TLVCodecs {
 
             int iterationTimes = propertyMetadata.iterationTimesExtractor().extractIterationTimes(context, context.evaluationContext());
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            if (length > 0) {
-                codecTracker.pushCoordinateBase(inputReaderIndexBeforeSlice);
-            }
-            final CodecTraceNode collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(propertyMetadata);
-            int sequence = 0;
-            try {
-                final int parentIndexBeforeRead = slice.readerIndex();
-
-                while (slice.isReadable() && iterationTimes-- > 0) {
-                    final CodecTraceNode collectionItemSpan = codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getName(), sequence++);
-                    final int indexBeforeRead = slice.readerIndex();
-
-                    final TLV tlv = decodeTlvWithTracker(codecTracker, propertyMetadata, context, slice, keyMeta, lengthMeta, valueMatchersByKey, fallbackValueMatcherMeta);
-                    results.add(tlv);
-
-                    codecTracker.updateContainerSpan(collectionItemSpan, null, FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead), slice.readerIndex());
-                    codecTracker.finishCurrentSpan();
-                }
-
-                codecTracker.updateContainerSpan(collectionFieldSpan, null, FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead), slice.readerIndex());
-                codecTracker.finishCurrentSpan();
-            } finally {
-                if (length > 0) {
-                    codecTracker.popCoordinateBase();
+            try (final CodecTracker.TraceScope collectionScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION, propertyMetadata.name(), propertyMetadata.field().getType().getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), inputReaderIndexBeforeSlice)) {
+                int sequence = 0;
+                try (final CodecTracker.CoordinateScope ignored = length > 0 ? codecTracker.openCoordinateBase(inputReaderIndexBeforeSlice) : null) {
+                    final int parentIndexBeforeRead = slice.readerIndex();
+                    while (slice.isReadable() && iterationTimes-- > 0) {
+                        final int indexBeforeRead = slice.readerIndex();
+                        try (final CodecTracker.TraceScope itemScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION_ITEM, propertyMetadata.name() + "[" + sequence + "]", TLV.class.getTypeName(), this.getClass().getSimpleName(), null, indexBeforeRead)) {
+                            itemScope.node().putAttribute("itemIndex", sequence++);
+                            final TLV tlv = decodeTlvWithTracker(codecTracker, propertyMetadata, context, slice, keyMeta, lengthMeta, valueMatchersByKey, fallbackValueMatcherMeta);
+                            results.add(tlv);
+                            itemScope.complete(tlv, FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead), slice.readerIndex());
+                        }
+                    }
+                    collectionScope.complete(results, FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead), slice.readerIndex());
                 }
             }
 
@@ -170,7 +160,6 @@ public class TLVCodecs {
             } finally {
                 temp.release();
             }
-
         }
 
         @Override
@@ -178,33 +167,32 @@ public class TLVCodecs {
             if (tlvIterable == null) {
                 return;
             }
-            final CodecTracker codecTracker = requireNonNull(context.codecTracker());
-            final CodecTraceNode collectionFieldSpan = codecTracker.startNewCollectionFieldSpan(propertyMetadata);
+
             final int parentIndexBeforeWrite = output.writerIndex();
-            int sequence = 0;
-            final ByteBuf temp = context.bufferFactory().buffer();
-            try {
-                for (TLV tlv : tlvIterable) {
-                    if (tlv == null) {
-                        continue;
+            final CodecTracker codecTracker = requireNonNull(context.codecTracker());
+            try (final CodecTracker.TraceScope collectionScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION, propertyMetadata.name(), propertyMetadata.field().getType().getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), parentIndexBeforeWrite)) {
+                int sequence = 0;
+                final ByteBuf temp = context.bufferFactory().buffer();
+                try {
+                    for (TLV tlv : tlvIterable) {
+                        if (tlv == null) {
+                            continue;
+                        }
+
+                        final int indexBeforeWrite = output.writerIndex();
+                        try (final CodecTracker.TraceScope itemScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION_ITEM, propertyMetadata.name() + "[" + sequence + "]", TLV.class.getTypeName(), this.getClass().getSimpleName(), null, indexBeforeWrite)) {
+                            itemScope.node().putAttribute("itemIndex", sequence++);
+                            encodeTlvWithTracker(context, output, tlv, codecTracker, temp, this.getClass().getSimpleName());
+                            itemScope.complete(tlv, FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), output.writerIndex());
+                        }
                     }
 
-                    final CodecTraceNode collectionItemSpan = codecTracker.startNewCollectionItemSpan(collectionFieldSpan, collectionFieldSpan.getName(), sequence++);
-                    final int indexBeforeWrite = output.writerIndex();
-
-                    encodeTlvWithTracker(context, output, tlv, codecTracker, temp, this.getClass().getSimpleName());
-
-                    codecTracker.updateSpan(collectionItemSpan, null, FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), indexBeforeWrite, output.writerIndex());
-                    codecTracker.finishCurrentSpan();
+                    collectionScope.complete(tlvIterable, FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite), output.writerIndex());
+                } finally {
+                    temp.release();
                 }
-            } finally {
-                temp.release();
             }
-
-            codecTracker.updateSpan(collectionFieldSpan, null, FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite), parentIndexBeforeWrite, output.writerIndex());
-            codecTracker.finishCurrentSpan();
         }
-
     }
 
     private static void encodeTlv(FieldCodec.SerializeContext context, ByteBuf output, TLV value, ByteBuf temp) {
@@ -237,28 +225,33 @@ public class TLVCodecs {
 
         // Length 是 sealed interface 并且只有一个实现类，所以强转是安全的
         final FieldLength.DefaultFieldLength valueLength = (FieldLength.DefaultFieldLength) tlv.length();
-        final boolean flattedSpan = tlv.value() instanceof CodecTracker.FlattedSpan;
+        final boolean flattenedTrace = tlv.value() instanceof CodecTracker.FlattenedTrace;
 
         // 2. 编码 value
-        if (flattedSpan) {
-            codecTracker.updateTempFieldName("value");
-            context.entityEncoder().encodeWithTracker(tlv.value(), temp, codecTracker);
+        final CodecTracker.TraceCheckpoint valueCheckpoint = codecTracker.checkpoint();
+        if (flattenedTrace) {
+            try (final CodecTracker.NodeOverrideScope ignoredName = codecTracker.overrideNextNodeName("value");
+                    final CodecTracker.TemporaryBufferScope ignoredBuffer = codecTracker.openTemporaryBuffer()) {
+                context.entityEncoder().encodeWithTracker(tlv.value(), temp, codecTracker);
+            }
             valueLength.setValue(temp.readableBytes());
         } else {
-            final CodecTraceNode valueTracker = codecTracker.startNewNestedFieldSpan("value", "", tlv.value().getClass().getSimpleName(), fieldCodec);
             final int indexBeforeWrite = temp.writerIndex();
-
-            context.entityEncoder().encodeWithTracker(tlv.value(), temp, codecTracker);
-            valueLength.setValue(temp.readableBytes());
-
-            codecTracker.updateSpan(valueTracker, null, FormatUtils.toHexString(temp, indexBeforeWrite, temp.writerIndex() - indexBeforeWrite), indexBeforeWrite, temp.writerIndex());
-            codecTracker.finishCurrentSpan();
+            try (final CodecTracker.TraceScope valueScope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, "value", tlv.value().getClass().getTypeName(), fieldCodec, "", indexBeforeWrite)) {
+                try (final CodecTracker.TemporaryBufferScope ignored = codecTracker.openTemporaryBuffer()) {
+                    context.entityEncoder().encodeWithTracker(tlv.value(), temp, codecTracker);
+                    valueLength.setValue(temp.readableBytes());
+                    valueScope.complete(tlv.value(), FormatUtils.toHexString(temp, indexBeforeWrite, temp.writerIndex() - indexBeforeWrite), temp.writerIndex());
+                }
+            }
         }
+        valueCheckpoint.captureNewChildren();
 
         // 3. 编码 value 长度
         valueLength.type().writeToWithTracker(output, valueLength.value(), codecTracker, "length");
 
         // 2. 编码 value
+        valueCheckpoint.relocateNewChildren(output.writerIndex());
         output.writeBytes(temp);
     }
 
@@ -284,7 +277,6 @@ public class TLVCodecs {
         return new TLV(keyWrapper, new FieldLength.DefaultFieldLength(lengthMeta.type()).setValue(valueLength), requireNonNull(value));
     }
 
-
     static TLV decodeTlvWithTracker(CodecTracker codecTracker, BeanPropertyMetadata propertyMetadata, FieldCodec.DeserializeContext context, ByteBuf slice, KeyMeta keyMeta, ValueLengthMeta lengthMeta, Map<Object, ValueMatcherMeta> valueMatchersByKey, FallbackValueMatcherMeta fallbackValueMatcherMeta) {
         // 1. tag
         final DataField.DictKey keyWrapper = keyMeta.readFromWithTracker(slice, codecTracker, "tag");
@@ -297,14 +289,16 @@ public class TLVCodecs {
         final ValueMatcherMeta valueMatcherMeta = valueMatchersByKey.get(key);
 
         // 3. value
-        codecTracker.updateTempFieldName("value");
         final FieldCodec<Object> valueCodec;
         if (valueMatcherMeta != null) {
             valueCodec = valueMatcherMeta.valueCodec();
         } else {
             valueCodec = fallbackValueMatcherMeta.codec();
         }
-        final Object value = valueCodec.deserializeWithTracker(propertyMetadata, context, slice, valueLength);
+        final Object value;
+        try (final CodecTracker.NodeOverrideScope ignoredName = codecTracker.overrideNextNodeName("value")) {
+            value = valueCodec.deserializeWithTracker(propertyMetadata, context, slice, valueLength);
+        }
         return new TLV(keyWrapper, new FieldLength.DefaultFieldLength(lengthMeta.type()).setValue(valueLength), requireNonNull(value));
     }
 

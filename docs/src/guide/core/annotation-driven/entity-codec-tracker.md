@@ -24,11 +24,11 @@ icon: arrows-spin
 ## 输出效果
 
 ```text
-[==> 0] CodecTraceNode[kind=ROOT, name='root', path='', javaType='io.github.hylexus.xtream.codec.core.EntityCodecWithTrackerTest$UserEntity', codecType='null', value=null, byteRange=0-23, hex='0000040009e697a0e5908de6b08f080006e4bf9de5af86', status=SUCCESS]
-	[==> 1] CodecTraceNode[kind=FIELD, name='id', path='id', javaType='null', codecType='U32FieldCodec', value=1024, byteRange=0-4, hex='00000400', status=SUCCESS]
-	[==> 1] CodecTraceNode[kind=LENGTH_FIELD, name='prependLengthField', path='prependLengthField', javaType='null', codecType='u8', value=9, byteRange=4-5, hex='09', status=SUCCESS]
-	[==> 1] CodecTraceNode[kind=FIELD, name='name', path='name', javaType='null', codecType='StringFieldCodec', value=无名氏, byteRange=5-14, hex='e697a0e5908de6b08f', status=SUCCESS]
-	[==> 1] CodecTraceNode[kind=FIELD, name='age', path='age', javaType='null', codecType='U16FieldCodec', value=2048, byteRange=14-16, hex='0800', status=SUCCESS]
-	[==> 1] CodecTraceNode[kind=LENGTH_FIELD, name='prependLengthField', path='prependLengthField', javaType='null', codecType='u8', value=6, byteRange=16-17, hex='06', status=SUCCESS]
-	[==> 1] CodecTraceNode[kind=FIELD, name='address', path='address', javaType='null', codecType='StringFieldCodec', value=保密, byteRange=17-23, hex='e4bf9de5af86', status=SUCCESS]
+[==> 0] CodecTraceNode[kind=ROOT, name='root', path='', javaType='io.github.hylexus.xtream.codec.core.EntityCodecWithTrackerTest$UserEntity', processorType='null', value=null, byteRange=0-23, hex='0000040009e697a0e5908de6b08f080006e4bf9de5af86', status=SUCCESS]
+	[==> 1] CodecTraceNode[kind=FIELD, name='id', path='id', javaType='null', processorType='U32FieldCodec', value=1024, byteRange=0-4, hex='00000400', status=SUCCESS]
+	[==> 1] CodecTraceNode[kind=LENGTH_FIELD, name='prependLengthField', path='prependLengthField', javaType='null', processorType='u8', value=9, byteRange=4-5, hex='09', status=SUCCESS]
+	[==> 1] CodecTraceNode[kind=FIELD, name='name', path='name', javaType='null', processorType='StringFieldCodec', value=无名氏, byteRange=5-14, hex='e697a0e5908de6b08f', status=SUCCESS]
+	[==> 1] CodecTraceNode[kind=FIELD, name='age', path='age', javaType='null', processorType='U16FieldCodec', value=2048, byteRange=14-16, hex='0800', status=SUCCESS]
+	[==> 1] CodecTraceNode[kind=LENGTH_FIELD, name='prependLengthField', path='prependLengthField', javaType='null', processorType='u8', value=6, byteRange=16-17, hex='06', status=SUCCESS]
+	[==> 1] CodecTraceNode[kind=FIELD, name='address', path='address', javaType='null', processorType='StringFieldCodec', value=保密, byteRange=17-23, hex='e4bf9de5af86', status=SUCCESS]
 ```

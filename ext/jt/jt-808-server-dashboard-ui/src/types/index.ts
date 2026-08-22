@@ -173,7 +173,7 @@ export interface CodecTraceNode {
   name: string;
   path?: string | null;
   javaType?: string | null;
-  codecType?: string | null;
+  processorType?: string | null;
   value?: unknown;
   valueSummary?: string | null;
   byteStart?: number | null;

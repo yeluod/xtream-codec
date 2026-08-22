@@ -112,4 +112,89 @@
     flex-shrink: 0;
     white-space: nowrap;
   }
+
+  /* 处理器类型使用独立色池，避免与错误状态的红色混淆。 */
+  .processor-chip-cyan,
+  .processor-chip-violet,
+  .processor-chip-emerald,
+  .processor-chip-amber,
+  .processor-chip-sky,
+  .processor-chip-fuchsia,
+  .processor-chip-teal,
+  .processor-chip-orange {
+    --chip-bg: color-mix(in oklab, var(--processor-chip-color) 16%, transparent);
+    --chip-fg: var(--processor-chip-color);
+  }
+
+  .processor-chip-cyan {
+    --processor-chip-color: #0e7490;
+  }
+
+  .processor-chip-violet {
+    --processor-chip-color: #7c3aed;
+  }
+
+  .processor-chip-emerald {
+    --processor-chip-color: #047857;
+  }
+
+  .processor-chip-amber {
+    --processor-chip-color: #b45309;
+  }
+
+  .processor-chip-sky {
+    --processor-chip-color: #0369a1;
+  }
+
+  .processor-chip-fuchsia {
+    --processor-chip-color: #a21caf;
+  }
+
+  .processor-chip-teal {
+    --processor-chip-color: #0f766e;
+  }
+
+  .processor-chip-orange {
+    --processor-chip-color: #c2410c;
+  }
+
+  .dark .processor-chip-cyan,
+  [data-theme="dark"] .processor-chip-cyan {
+    --processor-chip-color: #67e8f9;
+  }
+
+  .dark .processor-chip-violet,
+  [data-theme="dark"] .processor-chip-violet {
+    --processor-chip-color: #c4b5fd;
+  }
+
+  .dark .processor-chip-emerald,
+  [data-theme="dark"] .processor-chip-emerald {
+    --processor-chip-color: #6ee7b7;
+  }
+
+  .dark .processor-chip-amber,
+  [data-theme="dark"] .processor-chip-amber {
+    --processor-chip-color: #fcd34d;
+  }
+
+  .dark .processor-chip-sky,
+  [data-theme="dark"] .processor-chip-sky {
+    --processor-chip-color: #7dd3fc;
+  }
+
+  .dark .processor-chip-fuchsia,
+  [data-theme="dark"] .processor-chip-fuchsia {
+    --processor-chip-color: #f0abfc;
+  }
+
+  .dark .processor-chip-teal,
+  [data-theme="dark"] .processor-chip-teal {
+    --processor-chip-color: #5eead4;
+  }
+
+  .dark .processor-chip-orange,
+  [data-theme="dark"] .processor-chip-orange {
+    --processor-chip-color: #fdba74;
+  }
 }

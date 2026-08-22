@@ -28,7 +28,7 @@ import io.github.hylexus.xtream.codec.core.FieldCodec;
 import io.github.hylexus.xtream.codec.core.annotation.PrependLengthFieldType;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
 import io.github.hylexus.xtream.codec.core.impl.codec.RuntimeTypeFieldCodec;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.utils.BeanUtils;
 import io.netty.buffer.ByteBuf;
@@ -276,20 +276,8 @@ public class BasicBeanPropertyMetadata implements BeanPropertyMetadata {
 
     @Override
     public @Nullable Object decodePropertyValueWithTracker(FieldCodec.DeserializeContext context, ByteBuf input) {
-        if (this.fieldLengthExtractor instanceof FieldLengthExtractor.PrependFieldLengthExtractor) {
-            final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            final CodecTraceNode prependLengthFieldSpan = codecTracker.addPrependLengthFieldSpan(
-                    codecTracker.getCurrentSpan(), "prependLengthField", null, null, prependLengthFieldType.name(), "前置长度字段"
-            );
-            final int indexBeforeRead = input.readerIndex();
-            final int length = this.fieldLengthExtractor.extractFieldLength(context, context.evaluationContext(), input);
-            final String hexString = FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead);
-            codecTracker.updateSpan(prependLengthFieldSpan, length, hexString, indexBeforeRead, input.readerIndex());
-            return fieldCodec().deserializeWithTracker(this, context, input, length);
-        } else {
-            final int length = this.fieldLengthExtractor.extractFieldLength(context, context.evaluationContext(), input);
-            return fieldCodec().deserializeWithTracker(this, context, input, length);
-        }
+        final int length = this.fieldLengthExtractor.extractFieldLengthWithTracker(context, context.evaluationContext(), input);
+        return fieldCodec().deserializeWithTracker(this, context, input, length);
     }
 
     @Override
@@ -326,10 +314,11 @@ public class BasicBeanPropertyMetadata implements BeanPropertyMetadata {
             this.doEncodeWithTracker(context, output, value);
         } else {
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            final CodecTraceNode prependLengthFieldSpan = codecTracker.addPrependLengthFieldSpan(
-                    codecTracker.getCurrentSpan(), "prependLengthField", null, null, prependLengthFieldType.name(), "前置长度字段"
-            );
             final int lengthFieldWriterIndex = output.writerIndex();
+            final CodecTracker.DeferredNode prependLengthField = codecTracker.deferNode(
+                    CodecTraceNodeKind.LENGTH_FIELD, "prependLengthField", null,
+                    prependLengthFieldType.name(), "前置长度字段", lengthFieldWriterIndex
+            );
             // 写入长度字段占位符
             prependLengthFieldType.writeTo(output, 0);
             final int beforeEncode = output.writerIndex();
@@ -343,7 +332,7 @@ public class BasicBeanPropertyMetadata implements BeanPropertyMetadata {
             // 写入长度字段
             prependLengthFieldType.writeTo(output, byteCounts);
             final String hexString = FormatUtils.toHexString(output, lengthFieldWriterIndex, output.writerIndex() - lengthFieldWriterIndex);
-            codecTracker.updateSpan(prependLengthFieldSpan, byteCounts, hexString, lengthFieldWriterIndex, output.writerIndex());
+            prependLengthField.update(byteCounts, hexString, lengthFieldWriterIndex, output.writerIndex());
             output.writerIndex(afterEncode);
         }
     }

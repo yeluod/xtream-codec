@@ -261,7 +261,7 @@ public class DefaultJt808ResponseEncoder implements Jt808ResponseEncoder {
     private static CodecTraceNode copyNode(CodecTraceNode source, CodecTraceNode targetParent, int offset) {
         final CodecTraceNode target = new CodecTraceNode(source.getKind(), source.getName(), targetParent)
                 .setJavaType(source.getJavaType())
-                .setCodecType(source.getCodecType())
+                .setProcessorType(source.getProcessorType())
                 .setValue(source.getValue())
                 .setHex(source.getHex())
                 .setByteRange(shift(source.getByteStart(), offset), shift(source.getByteEnd(), offset))

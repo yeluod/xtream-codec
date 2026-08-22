@@ -21,7 +21,6 @@ import org.jspecify.annotations.Nullable;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * 编解码跟踪事件记录器。
@@ -30,18 +29,18 @@ import java.util.Objects;
  * @author Codex (AI)
  * @since 0.9.0
  */
-public class CodecTraceRecorder {
+class CodecTraceRecorder {
     private final CodecTrace trace = new CodecTrace();
     private final Deque<Integer> coordinateBaseStack = new ArrayDeque<>();
     private final Deque<Integer> temporaryBufferCursorStack = new ArrayDeque<>();
     private int rootStartAbsolute;
     private int cursor;
 
-    public CodecTrace trace() {
+    CodecTrace trace() {
         return trace;
     }
 
-    public void begin(CodecTraceDirection direction, int rootStartAbsolute, @Nullable String entityClass) {
+    void begin(CodecTraceDirection direction, int rootStartAbsolute, @Nullable String entityClass) {
         this.trace.setDirection(direction);
         this.rootStartAbsolute = rootStartAbsolute;
         this.cursor = 0;
@@ -53,11 +52,11 @@ public class CodecTraceRecorder {
         this.trace.getRoot().setByteRange(0, null);
     }
 
-    public void pushCoordinateBase(int currentBufferOffset) {
+    void pushCoordinateBase(int currentBufferOffset) {
         this.coordinateBaseStack.push(this.currentCoordinateBase() + currentBufferOffset);
     }
 
-    public void popCoordinateBase() {
+    void popCoordinateBase() {
         this.coordinateBaseStack.pop();
     }
 
@@ -86,14 +85,14 @@ public class CodecTraceRecorder {
         }
     }
 
-    public void finish(@Nullable String payloadHex, int rootEndAbsolute) {
+    void finish(@Nullable String payloadHex, int rootEndAbsolute) {
         this.trace.setPayloadHex(payloadHex);
         this.trace.getRoot()
                 .setByteRange(0, Math.max(rootEndAbsolute - this.rootStartAbsolute, this.cursor))
                 .setStatus(CodecTraceStatus.SUCCESS);
     }
 
-    public void fail(Throwable throwable, @Nullable Integer absoluteOffset) {
+    void fail(Throwable throwable, @Nullable Integer absoluteOffset) {
         final Integer relativeOffset = absoluteOffset == null ? null : Math.max(absoluteOffset - this.rootStartAbsolute, 0);
         final CodecTraceDiagnostic diagnostic = new CodecTraceDiagnostic(
                 "ERROR",
@@ -106,37 +105,19 @@ public class CodecTraceRecorder {
         this.trace.addDiagnostic(diagnostic);
     }
 
-    public CodecTraceNode enterNode(CodecTraceNode parent, CodecTraceNodeKind kind, String name) {
+    void markFailed() {
+        this.trace.getRoot().setStatus(CodecTraceStatus.ERROR);
+    }
+
+    CodecTraceNode enterNode(CodecTraceNode parent, CodecTraceNodeKind kind, String name, int localStart) {
+        final int relativeStart = this.toRelative(this.currentCoordinateBase(), localStart);
         final CodecTraceNode node = new CodecTraceNode(kind, name, parent)
-                .setByteRange(this.cursor, null);
+                .setByteRange(relativeStart, null);
         parent.addChild(node);
         return node;
     }
 
-    public void exitNode(CodecTraceNode node) {
-        completeContainerNode(node);
-    }
-
-    public CodecTraceNode addLeaf(CodecTraceNodeKind kind, CodecTraceNode parent, String name,
-                                  @Nullable Object value, @Nullable String hex, @Nullable String codecType,
-                                  @Nullable String javaType, @Nullable String fieldDesc,
-                                  @Nullable Integer absoluteStart, @Nullable Integer absoluteEnd) {
-        final ByteRange byteRange = this.normalizeRange(parent.getByteStart(), absoluteStart, absoluteEnd, hex);
-        final CodecTraceNode node = new CodecTraceNode(kind, name, parent)
-                .setValue(value)
-                .setHex(hex)
-                .setCodecType(codecType)
-                .setJavaType(javaType)
-                .setByteRange(byteRange.start(), byteRange.end())
-                .setStatus(CodecTraceStatus.SUCCESS)
-                .putAttribute("fieldDesc", fieldDesc);
-        parent.addChild(node);
-        this.cursor = Math.max(this.cursor, byteRange.end());
-        expandParents(parent, byteRange.end());
-        return node;
-    }
-
-    public void updateLeaf(CodecTraceNode node, @Nullable Object value, @Nullable String hex, @Nullable Integer absoluteStart, @Nullable Integer absoluteEnd) {
+    void updateLeaf(CodecTraceNode node, @Nullable Object value, @Nullable String hex, @Nullable Integer absoluteStart, @Nullable Integer absoluteEnd) {
         final ByteRange byteRange = this.normalizeRange(node.getByteStart(), absoluteStart, absoluteEnd, hex);
         node.setValue(value)
                 .setHex(hex)
@@ -146,40 +127,61 @@ public class CodecTraceRecorder {
         expandParents(node, byteRange.end());
     }
 
-    public void updateContainerNode(CodecTraceNode node, @Nullable Object value, @Nullable String hex, @Nullable Integer absoluteEnd) {
-        final Integer byteStart = node.getByteStart();
-        final int start = byteStart == null ? this.cursor : byteStart;
-        final int end = absoluteEnd == null
-                ? start + bytesLength(hex)
-                : Math.max(this.currentCoordinateBase() + absoluteEnd - this.rootStartAbsolute, start);
-        node.setValue(value)
-                .setHex(hex)
-                .setByteRange(start, end)
-                .setStatus(CodecTraceStatus.SUCCESS);
-        this.cursor = Math.max(this.cursor, end);
-        expandParents(node, end);
-    }
-
-    public @Nullable CodecTraceNode parentOf(CodecTraceNode node) {
-        final String parentId = node.getParentId();
-        return parentId == null ? null : findNode(this.trace.getRoot(), parentId);
-    }
-
-    private int currentCoordinateBase() {
-        return this.coordinateBaseStack.peek() == null ? 0 : this.coordinateBaseStack.peek();
-    }
-
-    private void completeContainerNode(CodecTraceNode node) {
-        final Integer byteStart = node.getByteStart();
-        final int start = byteStart == null ? this.cursor : byteStart;
-        int end = this.cursor;
+    void completeNode(CodecTraceNode node, @Nullable Object value, @Nullable String hex,
+                      int coordinateBase, int localStart, int localEnd) {
+        final int relativeStart = this.toRelative(coordinateBase, localStart);
+        final int relativeEnd = Math.max(this.toRelative(coordinateBase, localEnd), relativeStart);
+        int end = relativeEnd;
         for (final CodecTraceNode child : node.getChildren()) {
             if (child.getByteEnd() != null) {
                 end = Math.max(end, child.getByteEnd());
             }
         }
-        node.setByteRange(start, Math.max(end, start)).setStatus(CodecTraceStatus.SUCCESS);
-        expandParents(Objects.requireNonNullElse(parentOf(node), this.trace.getRoot()), Math.max(end, start));
+        node.setValue(value)
+                .setHex(hex)
+                .setByteRange(Math.min(relativeStart, node.getByteStart() == null ? relativeStart : node.getByteStart()), end)
+                .setStatus(CodecTraceStatus.SUCCESS);
+        this.cursor = Math.max(this.cursor, end);
+        expandParents(parentOf(node), end);
+    }
+
+    void failNode(CodecTraceNode node, Throwable throwable, int coordinateBase, int localOffset) {
+        final int relativeOffset = Math.max(this.toRelative(coordinateBase, localOffset), 0);
+        node.setByteRange(node.getByteStart(), Math.max(node.getByteEnd() == null ? relativeOffset : node.getByteEnd(), relativeOffset))
+                .setStatus(CodecTraceStatus.ERROR);
+        final CodecTraceDiagnostic diagnostic = new CodecTraceDiagnostic(
+                "ERROR",
+                throwable.getMessage() == null ? throwable.getClass().getName() : throwable.getMessage(),
+                node.getId(),
+                relativeOffset,
+                throwable.getClass().getName()
+        );
+        node.addDiagnostic(diagnostic);
+        this.trace.addDiagnostic(diagnostic);
+    }
+
+    void failNode(CodecTraceNode node, Throwable throwable, int absoluteOffset) {
+        this.failNode(node, throwable, 0, absoluteOffset);
+    }
+
+    void discardNode(CodecTraceNode node) {
+        final CodecTraceNode parent = parentOf(node);
+        if (parent != null) {
+            parent.getChildren().remove(node);
+        }
+    }
+
+    private @Nullable CodecTraceNode parentOf(CodecTraceNode node) {
+        final String parentId = node.getParentId();
+        return parentId == null ? null : findNode(this.trace.getRoot(), parentId);
+    }
+
+    int currentCoordinateBase() {
+        return this.coordinateBaseStack.peek() == null ? 0 : this.coordinateBaseStack.peek();
+    }
+
+    private int toRelative(int coordinateBase, int localOffset) {
+        return Math.max(coordinateBase + localOffset - this.rootStartAbsolute, 0);
     }
 
     private void expandParents(@Nullable CodecTraceNode node, int byteEnd) {

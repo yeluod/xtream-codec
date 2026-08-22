@@ -22,6 +22,7 @@ import io.github.hylexus.xtream.codec.core.annotation.DerivedField;
 import io.github.hylexus.xtream.codec.core.annotation.PrependLengthFieldType;
 import io.github.hylexus.xtream.codec.core.annotation.EncodedLength;
 import io.github.hylexus.xtream.codec.core.type.Preset;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.Unpooled;
@@ -239,6 +240,17 @@ public class EntityCodecBenchmark {
     }
 
     @Benchmark
+    public void flatRecordTrackedEncode(Blackhole bh) {
+        ByteBuf buf = ALLOC.buffer();
+        try {
+            CODEC.encode(flatRecord, buf, new CodecTracker());
+            bh.consume(buf);
+        } finally {
+            buf.release();
+        }
+    }
+
+    @Benchmark
     public void rangeRecordEncode(Blackhole bh) {
         ByteBuf buf = ALLOC.buffer();
         try {
@@ -302,6 +314,17 @@ public class EntityCodecBenchmark {
         ByteBuf buf = Unpooled.wrappedBuffer(flatBytes);
         try {
             FlatRecord decoded = CODEC.decode(FlatRecord.class, buf);
+            bh.consume(decoded);
+        } finally {
+            buf.release();
+        }
+    }
+
+    @Benchmark
+    public void flatRecordTrackedDecode(Blackhole bh) {
+        ByteBuf buf = Unpooled.wrappedBuffer(flatBytes);
+        try {
+            FlatRecord decoded = CODEC.decode(FlatRecord.class, buf, new CodecTracker());
             bh.consume(decoded);
         } finally {
             buf.release();

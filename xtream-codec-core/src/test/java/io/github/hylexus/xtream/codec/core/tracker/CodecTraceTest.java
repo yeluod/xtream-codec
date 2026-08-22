@@ -17,6 +17,7 @@
 package io.github.hylexus.xtream.codec.core.tracker;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.common.utils.XtreamBytes;
 import io.github.hylexus.xtream.codec.core.EntityCodec;
 import io.netty.buffer.ByteBuf;
@@ -68,6 +69,38 @@ class CodecTraceTest {
     }
 
     @Test
+    void shouldNotCreateTraceWhenProductionPathIsUsed() {
+        final CodecDebugEntity01 original = createSimpleEntity();
+        final CodecTracker unusedTracker = new CodecTracker();
+        final ByteBuf buffer = ByteBufAllocator.DEFAULT.buffer();
+        try {
+            this.entityCodec.encode(original, buffer, null);
+            this.entityCodec.decode(CodecDebugEntity01.class, buffer, null);
+
+            assertEquals(CodecTraceDirection.UNKNOWN, unusedTracker.getTrace().getDirection());
+            assertTrue(unusedTracker.getTrace().getRoot().getChildren().isEmpty());
+        } finally {
+            XtreamBytes.releaseBuf(buffer);
+        }
+    }
+
+    @Test
+    void shouldKeepTrackedAndProductionPayloadsIdentical() {
+        final CodecDebugEntity01 original = createSimpleEntity();
+        final ByteBuf production = ByteBufAllocator.DEFAULT.buffer();
+        final ByteBuf tracked = ByteBufAllocator.DEFAULT.buffer();
+        try {
+            this.entityCodec.encode(original, production, null);
+            this.entityCodec.encode(original, tracked, new CodecTracker());
+
+            assertEquals(FormatUtils.toHexString(production), FormatUtils.toHexString(tracked));
+        } finally {
+            XtreamBytes.releaseBuf(production);
+            XtreamBytes.releaseBuf(tracked);
+        }
+    }
+
+    @Test
     void shouldRecordSimpleFieldByteRanges() {
         final CodecDebugEntity01 original = createSimpleEntity();
         final ByteBuf buffer = ByteBufAllocator.DEFAULT.buffer();
@@ -88,6 +121,7 @@ class CodecTraceTest {
             assertEquals(9, children.get(3).getByteEnd());
             assertEquals(9, children.get(4).getByteStart());
             assertEquals(15, children.get(4).getByteEnd());
+            assertEquals("U8FieldCodec", children.getFirst().getProcessorType());
         } finally {
             XtreamBytes.releaseBuf(buffer);
         }
@@ -114,6 +148,7 @@ class CodecTraceTest {
             assertTrue(map.isPresent());
             assertEquals(2, map.orElseThrow().getChildren().size());
             assertEquals(0, map.orElseThrow().getChildren().get(0).getAttributes().get("itemIndex"));
+            assertEquals("LocationExtraItemFieldCodec", map.orElseThrow().getProcessorType());
         } finally {
             XtreamBytes.releaseBuf(buffer);
         }
@@ -207,9 +242,78 @@ class CodecTraceTest {
             assertTrue(view.nodeIdsByByteOffset().get(0).contains(view.root().children().getFirst().id()));
             assertTrue(json.contains("payloadHex"));
             assertTrue(json.contains("byteStart"));
+            assertTrue(json.contains("processorType"));
+            assertFalse(json.contains("codecType"));
         } finally {
             XtreamBytes.releaseBuf(buffer);
         }
+    }
+
+    @Test
+    void shouldDeriveViewHexFromRootPayloadWhenNodeHexIsMissing() {
+        final CodecTracker tracker = new CodecTracker();
+        tracker.beginEncode(0, "Example");
+        try (final CodecTracker.TraceScope scope = tracker.enterScope(
+                CodecTraceNodeKind.FIELD, "value", "byte", "U8FieldCodec", "值", 1)) {
+            scope.complete(2, null, 2);
+        }
+        tracker.finishTrace("0102", 2);
+
+        assertEquals("02", tracker.toTraceView().root().children().getFirst().hex());
+    }
+
+    @Test
+    void shouldTranslateNestedSliceCoordinatesToRootPayload() {
+        final CodecTracker tracker = new CodecTracker();
+        tracker.beginDecode(0, "Example");
+        try (CodecTracker.TraceScope parent = tracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, "body", "Body", "BodyCodec", "消息体", 4)) {
+            try (CodecTracker.CoordinateScope ignored = tracker.openCoordinateBase(4)) {
+                try (CodecTracker.TraceScope child = tracker.enterScope(CodecTraceNodeKind.FIELD, "value", "byte", "U8FieldCodec", "值", 2)) {
+                    child.complete(1, 3);
+                }
+                try (CodecTracker.CoordinateScope ignored1 = tracker.openCoordinateBase(3)) {
+                    try (CodecTracker.TraceScope nested = tracker.enterScope(CodecTraceNodeKind.FIELD, "nested", "byte", "U8FieldCodec", "嵌套", 1)) {
+                        nested.complete(2, 2);
+                    }
+                }
+            }
+            parent.complete("body", 9);
+        }
+
+        final CodecTraceNode body = tracker.getTrace().getRoot().getChildren().getFirst();
+        assertEquals(4, body.getByteStart());
+        assertEquals(9, body.getByteEnd());
+        assertEquals(6, body.getChildren().get(0).getByteStart());
+        assertEquals(7, body.getChildren().get(0).getByteEnd());
+        assertEquals(8, body.getChildren().get(1).getByteStart());
+        assertEquals(9, body.getChildren().get(1).getByteEnd());
+    }
+
+    @Test
+    void shouldAttachTemporarySubtreeToOutputCoordinates() {
+        final CodecTracker tracker = new CodecTracker();
+        tracker.beginEncode(0, "Example");
+        try (final CodecTracker.TraceScope parent = tracker.enterScope(CodecTraceNodeKind.MAP_ENTRY, "[0]", null, null, null, 0)) {
+            final CodecTracker.TraceCheckpoint checkpoint = tracker.checkpoint();
+            try (final CodecTracker.TemporaryBufferScope ignored = tracker.openTemporaryBuffer()) {
+                try (final CodecTracker.TraceScope child = tracker.enterScope(CodecTraceNodeKind.FIELD, "value", "byte", "U8FieldCodec", "值", 0)) {
+                    child.complete(1, 2);
+                }
+            }
+            checkpoint.captureNewChildren();
+            try (final CodecTracker.TraceScope length = tracker.enterScope(CodecTraceNodeKind.FIELD, "valueLength", "byte", "U8FieldCodec", "长度", 0)) {
+                length.complete(2, 1);
+            }
+            checkpoint.relocateNewChildren(5);
+            parent.complete(null, 7);
+        }
+
+        final List<CodecTraceNode> children = tracker.getTrace().getRoot().getChildren().getFirst().getChildren();
+        final CodecTraceNode child = children.getFirst();
+        assertEquals(5, child.getByteStart());
+        assertEquals(7, child.getByteEnd());
+        assertEquals(0, children.get(1).getByteStart());
+        assertEquals(1, children.get(1).getByteEnd());
     }
 
     @Test
@@ -221,12 +325,157 @@ class CodecTraceTest {
 
             assertThrows(RuntimeException.class, () -> this.entityCodec.decode(CodecDebugEntity01.class, buffer, tracker));
 
-            assertEquals(1, tracker.getTrace().getRoot().getChildren().size());
-            assertFalse(tracker.getTrace().getDiagnostics().isEmpty());
-            assertEquals(CodecTraceStatus.ERROR, tracker.getTrace().getRoot().getStatus());
+            final CodecTrace trace = tracker.getTrace();
+            assertEquals(2, trace.getRoot().getChildren().size());
+            assertEquals(CodecTraceStatus.ERROR, trace.getRoot().getStatus());
+            assertEquals(CodecTraceStatus.ERROR, trace.getRoot().getChildren().get(1).getStatus());
+            assertEquals(1, trace.getRoot().getChildren().get(1).getDiagnostics().size());
+            assertEquals(1, trace.getDiagnostics().size());
         } finally {
             XtreamBytes.releaseBuf(buffer);
         }
+    }
+
+    @Test
+    void shouldRecordScopedNodesWithAutomaticParenting() {
+        final CodecTracker tracker = new CodecTracker();
+        tracker.beginEncode(0, "Example");
+
+        try (final CodecTracker.TraceScope parent = tracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, "body", "Body", "BodyCodec", "消息体", 0)) {
+            try (final CodecTracker.TraceScope child = tracker.enterScope(CodecTraceNodeKind.FIELD, "value", "int", "U8FieldCodec", "值", 0)) {
+                child.complete(1, 1);
+            }
+            parent.complete("body", 1);
+        }
+        tracker.finishTrace("01", 2);
+
+        final CodecTraceNode parent = tracker.getTrace().getRoot().getChildren().getFirst();
+        assertEquals("body", parent.getName());
+        assertEquals(0, parent.getByteStart());
+        assertEquals(1, parent.getByteEnd());
+        assertEquals(parent.getId(), parent.getChildren().getFirst().getParentId());
+        assertEquals(CodecTraceStatus.SUCCESS, parent.getStatus());
+    }
+
+    @Test
+    void shouldLimitNodeOverrideToItsExplicitScope() {
+        final CodecTracker tracker = new CodecTracker();
+        tracker.beginEncode(0, "Example");
+
+        try (final CodecTracker.NodeOverrideScope ignored = tracker.overrideNextNodeName("overridden")) {
+            try (final CodecTracker.TraceScope first = tracker.enterScope(CodecTraceNodeKind.FIELD, "first", "byte", "U8FieldCodec", null, 0)) {
+                first.complete(1, 1);
+            }
+            try (final CodecTracker.TraceScope second = tracker.enterScope(CodecTraceNodeKind.FIELD, "second", "byte", "U8FieldCodec", null, 1)) {
+                second.complete(2, 2);
+            }
+        }
+        try (final CodecTracker.NodeOverrideScope ignored = tracker.overrideNextNodeName("unused")) {
+            // 未创建节点时直接关闭，不能污染后续节点。
+        }
+        try (final CodecTracker.TraceScope third = tracker.enterScope(
+                CodecTraceNodeKind.FIELD, "third", "byte", "U8FieldCodec", null, 2)) {
+            third.complete(3, 3);
+        }
+
+        final List<CodecTraceNode> children = tracker.getTrace().getRoot().getChildren();
+        assertEquals("overridden", children.get(0).getName());
+        assertEquals("second", children.get(1).getName());
+        assertEquals("third", children.get(2).getName());
+    }
+
+    @Test
+    void shouldRecoverScopeStackAfterFailure() {
+        final CodecTracker tracker = new CodecTracker();
+        tracker.beginDecode(0, "Example");
+
+        final CodecTracker.TraceScope failed = tracker.enterScope(CodecTraceNodeKind.FIELD, "failed", "int", "U8FieldCodec", "失败字段", 0);
+        failed.fail(new IllegalArgumentException("invalid value"), 1);
+
+        try (final CodecTracker.TraceScope next = tracker.enterScope(
+                CodecTraceNodeKind.FIELD, "next", "int", "U8FieldCodec", "下一个字段", 1)) {
+            next.complete(2, 2);
+        }
+
+        assertEquals(2, tracker.getTrace().getRoot().getChildren().size());
+        assertEquals(CodecTraceStatus.ERROR, tracker.getTrace().getRoot().getChildren().get(0).getStatus());
+        assertEquals(CodecTraceStatus.SUCCESS, tracker.getTrace().getRoot().getChildren().get(1).getStatus());
+        assertEquals(1, tracker.getTrace().getDiagnostics().size());
+    }
+
+    @Test
+    void shouldAssociateOperationFailureWithDeepestIncompleteScope() {
+        final CodecTracker tracker = new CodecTracker();
+        final IllegalArgumentException failure = new IllegalArgumentException("invalid value");
+        tracker.beginDecode(0, "Example");
+
+        try {
+            try (final CodecTracker.TraceScope parent = tracker.enterScope(
+                    CodecTraceNodeKind.NESTED_FIELD, "body", "Body", "BodyCodec", "消息体", 0)) {
+                try (final CodecTracker.TraceScope child = tracker.enterScope(
+                        CodecTraceNodeKind.FIELD, "value", "int", "U8FieldCodec", "值", 1)) {
+                    throw failure;
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            tracker.recordFailure(e, 2);
+        }
+
+        final CodecTrace trace = tracker.getTrace();
+        final CodecTraceNode parent = trace.getRoot().getChildren().getFirst();
+        final CodecTraceNode child = parent.getChildren().getFirst();
+        assertEquals(CodecTraceStatus.ERROR, trace.getRoot().getStatus());
+        assertEquals(CodecTraceStatus.ERROR, parent.getStatus());
+        assertEquals(CodecTraceStatus.ERROR, child.getStatus());
+        assertTrue(parent.getDiagnostics().isEmpty());
+        assertEquals(1, child.getDiagnostics().size());
+        assertEquals(1, trace.getDiagnostics().size());
+        assertEquals(child.getId(), trace.getDiagnostics().getFirst().nodeId());
+    }
+
+    @Test
+    void shouldNotDuplicateExplicitScopeFailureAtOperationBoundary() {
+        final CodecTracker tracker = new CodecTracker();
+        final IllegalArgumentException failure = new IllegalArgumentException("invalid value");
+        tracker.beginDecode(0, "Example");
+
+        try (final CodecTracker.TraceScope scope = tracker.enterScope(
+                CodecTraceNodeKind.FIELD, "value", "int", "U8FieldCodec", "值", 0)) {
+            scope.fail(failure, 1);
+        }
+        tracker.recordFailure(failure, 1);
+
+        final CodecTrace trace = tracker.getTrace();
+        assertEquals(CodecTraceStatus.ERROR, trace.getRoot().getStatus());
+        assertEquals(1, trace.getRoot().getChildren().getFirst().getDiagnostics().size());
+        assertEquals(1, trace.getDiagnostics().size());
+    }
+
+    @Test
+    void shouldRejectOutOfOrderScopeClose() {
+        final CodecTracker tracker = new CodecTracker();
+        tracker.beginEncode(0, "Example");
+        final CodecTracker.TraceScope outer = tracker.enterScope(
+                CodecTraceNodeKind.NESTED_FIELD, "outer", "Outer", "OuterCodec", "外层", 0);
+        final CodecTracker.TraceScope inner = tracker.enterScope(
+                CodecTraceNodeKind.FIELD, "inner", "int", "U8FieldCodec", "内层", 0);
+
+        assertThrows(IllegalStateException.class, outer::close);
+        inner.complete(1, 1);
+        outer.complete("outer", 1);
+    }
+
+    @Test
+    void shouldDiagnoseUnclosedScopesAtTraceCompletion() {
+        final CodecTracker tracker = new CodecTracker();
+        tracker.beginEncode(0, "Example");
+        tracker.enterScope(CodecTraceNodeKind.FIELD, "unfinished", "byte", "U8FieldCodec", "未完成", 0);
+
+        tracker.finishTrace("01", 1);
+
+        assertEquals(CodecTraceStatus.ERROR, tracker.getTrace().getRoot().getStatus());
+        assertFalse(tracker.getTrace().getDiagnostics().isEmpty());
+        assertTrue(tracker.getTrace().getRoot().getChildren().getFirst().getStatus() == CodecTraceStatus.ERROR);
     }
 
     private static CodecDebugEntity01 createSimpleEntity() {

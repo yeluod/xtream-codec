@@ -23,6 +23,7 @@ import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
 import io.github.hylexus.xtream.codec.common.exception.NotYetImplementedException;
 import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.core.annotation.NumberSignedness;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.utils.BeanUtils;
 import io.netty.buffer.ByteBuf;
@@ -58,15 +59,18 @@ public interface FieldCodec<T> {
      */
     default @Nullable T deserializeWithTracker(BeanPropertyMetadata propertyMetadata, DeserializeContext context, ByteBuf input, int length) {
         final int indexBeforeRead = input.readerIndex();
-        final T value = this.deserialize(propertyMetadata, context, input, length);
-        final String hexString = FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead);
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        if (propertyMetadata.isEncodedLength()) {
-            codecTracker.addLengthFieldSpan(codecTracker.getCurrentSpan(), propertyMetadata.name(), value, hexString, this, propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeRead, input.readerIndex());
-        } else {
-            codecTracker.addFieldSpan(codecTracker.getCurrentSpan(), propertyMetadata.name(), value, hexString, this, propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeRead, input.readerIndex());
+        try (final CodecTracker.TraceScope scope = codecTracker.enterScope(
+                propertyMetadata.isEncodedLength() ? CodecTraceNodeKind.LENGTH_FIELD : CodecTraceNodeKind.FIELD,
+                propertyMetadata,
+                this.getClass(),
+                indexBeforeRead
+        )) {
+            final T value = this.deserialize(propertyMetadata, context, input, length);
+            final String hexString = FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead);
+            scope.complete(value, hexString, input.readerIndex());
+            return value;
         }
-        return value;
     }
 
     void serialize(BeanPropertyMetadata propertyMetadata, SerializeContext context, ByteBuf output, @Nullable T value);
@@ -84,13 +88,16 @@ public interface FieldCodec<T> {
      */
     default void serializeWithTracker(BeanPropertyMetadata propertyMetadata, SerializeContext context, ByteBuf output, @Nullable T value) {
         final int indexBeforeWrite = output.writerIndex();
-        this.serialize(propertyMetadata, context, output, value);
-        final String hexString = FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite);
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        if (propertyMetadata.isEncodedLength()) {
-            codecTracker.addLengthFieldSpan(codecTracker.getCurrentSpan(), propertyMetadata.name(), value, hexString, this, propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeWrite, output.writerIndex());
-        } else {
-            codecTracker.addFieldSpan(codecTracker.getCurrentSpan(), propertyMetadata.name(), value, hexString, this, propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeWrite, output.writerIndex());
+        try (final CodecTracker.TraceScope scope = codecTracker.enterScope(
+                propertyMetadata.isEncodedLength() ? CodecTraceNodeKind.LENGTH_FIELD : CodecTraceNodeKind.FIELD,
+                propertyMetadata,
+                this.getClass(),
+                indexBeforeWrite
+        )) {
+            this.serialize(propertyMetadata, context, output, value);
+            final String hexString = FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite);
+            scope.complete(value, hexString, output.writerIndex());
         }
     }
 

@@ -16,12 +16,11 @@
 
 package io.github.hylexus.xtream.codec.core.impl.codec;
 
-import io.github.hylexus.xtream.codec.common.bean.BeanMetadata;
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
 import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.common.utils.XtreamTypes;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNode;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.netty.buffer.ByteBuf;
 import org.jspecify.annotations.Nullable;
@@ -57,16 +56,12 @@ public class DelegateBeanMetadataFieldCodec implements FieldCodec<Object> {
         if (XtreamTypes.isBasicType(propertyMetadata.rawClass())) {
             return context.entityDecoder().decodeWithTracker(context.version(), this.targetEntityClass, input, codecTracker);
         } else {
-            final CodecTraceNode nestedFieldSpan = codecTracker.startNewNestedFieldSpan(propertyMetadata, this.getClass().getSimpleName(), null);
-            final Object instance;
-            try {
-                final int indexBeforeRead = input.readerIndex();
-                instance = context.entityDecoder().decodeWithTracker(context.version(), this.targetEntityClass, input, codecTracker);
-                codecTracker.updateContainerSpan(nestedFieldSpan, null, FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead), input.readerIndex());
-            } finally {
-                codecTracker.finishCurrentSpan();
+            final int indexBeforeRead = input.readerIndex();
+            try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, propertyMetadata.name(), this.targetEntityClass.getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeRead)) {
+                final Object instance = context.entityDecoder().decodeWithTracker(context.version(), this.targetEntityClass, input, codecTracker);
+                scope.complete(instance, FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead), input.readerIndex());
+                return instance;
             }
-            return instance;
         }
     }
 
@@ -81,13 +76,10 @@ public class DelegateBeanMetadataFieldCodec implements FieldCodec<Object> {
         if (XtreamTypes.isBasicType(propertyMetadata.rawClass())) {
             context.entityEncoder().encodeWithTracker(context.version(), instance, output, codecTracker);
         } else {
-            final CodecTraceNode nestedFieldSpan = codecTracker.startNewNestedFieldSpan(propertyMetadata, this.getClass().getSimpleName(), null);
-            try {
-                final int indexBeforeWrite = output.writerIndex();
+            final int indexBeforeWrite = output.writerIndex();
+            try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, propertyMetadata.name(), this.targetEntityClass.getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeWrite)) {
                 context.entityEncoder().encodeWithTracker(context.version(), instance, output, codecTracker);
-                codecTracker.updateSpan(nestedFieldSpan, null, FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), indexBeforeWrite, output.writerIndex());
-            } finally {
-                codecTracker.finishCurrentSpan();
+                scope.complete(instance, FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), output.writerIndex());
             }
         }
     }

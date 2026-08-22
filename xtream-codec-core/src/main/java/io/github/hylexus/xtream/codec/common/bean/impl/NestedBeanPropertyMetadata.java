@@ -24,6 +24,7 @@ import io.github.hylexus.xtream.codec.core.ContainerInstanceFactory;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
 import io.github.hylexus.xtream.codec.core.impl.DefaultDeserializeContext;
 import io.github.hylexus.xtream.codec.core.impl.DefaultSerializeContext;
+import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.utils.BeanUtils;
 import io.github.hylexus.xtream.codec.core.utils.XtreamFieldUtils;
@@ -81,29 +82,27 @@ public class NestedBeanPropertyMetadata extends BasicBeanPropertyMetadata {
                 ? input // all remaining
                 : input.readSlice(length);
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        codecTracker.startNewNestedFieldSpan(this, this.getClass().getSimpleName(), null);
-        final FieldCodec.DeserializeContext newContext = new DefaultDeserializeContext(context, instance);
-        final Object result;
-        if (length < 0) {
-            if (!nestedBeanMetadata.getRawType().isRecord()) {
-                result = this.decodePojoFields(newContext, slice, instance, true);
-            } else {
-                result = this.decodeRecordFields(newContext, slice, instance, true);
-            }
-        } else {
-            codecTracker.pushCoordinateBase(inputReaderIndexBeforeSlice);
-            try {
+        try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, this, this.getClass(), inputReaderIndexBeforeSlice)) {
+            final FieldCodec.DeserializeContext newContext = new DefaultDeserializeContext(context, instance);
+            final Object result;
+            if (length < 0) {
                 if (!nestedBeanMetadata.getRawType().isRecord()) {
                     result = this.decodePojoFields(newContext, slice, instance, true);
                 } else {
                     result = this.decodeRecordFields(newContext, slice, instance, true);
                 }
-            } finally {
-                codecTracker.popCoordinateBase();
+            } else {
+                try (final CodecTracker.CoordinateScope ignored = codecTracker.openCoordinateBase(inputReaderIndexBeforeSlice)) {
+                    if (!nestedBeanMetadata.getRawType().isRecord()) {
+                        result = this.decodePojoFields(newContext, slice, instance, true);
+                    } else {
+                        result = this.decodeRecordFields(newContext, slice, instance, true);
+                    }
+                }
             }
+            scope.complete(result, input.readerIndex());
+            return result;
         }
-        codecTracker.finishCurrentSpan();
-        return result;
     }
 
 
@@ -181,17 +180,19 @@ public class NestedBeanPropertyMetadata extends BasicBeanPropertyMetadata {
     protected void doEncodeWithTracker(FieldCodec.SerializeContext context, ByteBuf output, Object value) {
         final DefaultSerializeContext newContext = new DefaultSerializeContext(context, value);
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        codecTracker.startNewNestedFieldSpan(this, this.getClass().getSimpleName(), null);
-        for (final BeanPropertyMetadata pm : this.nestedBeanMetadata.getPropertyMetadataList()) {
-            if (pm.isDerived() || !pm.conditionEvaluator().evaluate(newContext)) {
-                newContext.evaluationContext().setVariable(pm.name(), null);
-                continue;
+        final int indexBeforeWrite = output.writerIndex();
+        try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, this, this.getClass(), indexBeforeWrite)) {
+            for (final BeanPropertyMetadata pm : this.nestedBeanMetadata.getPropertyMetadataList()) {
+                if (pm.isDerived() || !pm.conditionEvaluator().evaluate(newContext)) {
+                    newContext.evaluationContext().setVariable(pm.name(), null);
+                    continue;
+                }
+                final Object nestedValue = XtreamFieldUtils.resolveEncodingValue(pm, value, this.nestedBeanMetadata);
+                pm.encodePropertyValueWithTracker(newContext, output, nestedValue);
+                newContext.evaluationContext().setVariable(pm.name(), nestedValue);
             }
-            final Object nestedValue = XtreamFieldUtils.resolveEncodingValue(pm, value, this.nestedBeanMetadata);
-            pm.encodePropertyValueWithTracker(newContext, output, nestedValue);
-            newContext.evaluationContext().setVariable(pm.name(), nestedValue);
+            scope.complete(value, output.writerIndex());
         }
-        codecTracker.finishCurrentSpan();
     }
 
     @Override

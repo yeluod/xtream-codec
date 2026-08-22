@@ -133,18 +133,27 @@ export const sortTraceChildrenByRange = (children: CodecTraceNode[] = []) => {
     .map(({ node }) => node);
 };
 
-const codecChipColors = ["accent", "success", "warning", "danger"] as const;
+const processorChipClasses = [
+  "processor-chip-cyan",
+  "processor-chip-violet",
+  "processor-chip-emerald",
+  "processor-chip-amber",
+  "processor-chip-sky",
+  "processor-chip-fuchsia",
+  "processor-chip-teal",
+  "processor-chip-orange",
+] as const;
 
-export const codecChipColor = (
-  codecType: string,
-): (typeof codecChipColors)[number] => {
+export const processorChipClass = (
+  processorType: string,
+): (typeof processorChipClasses)[number] => {
   let hash = 0;
 
-  for (let i = 0; i < codecType.length; i += 1) {
-    hash = (hash * 31 + codecType.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < processorType.length; i += 1) {
+    hash = (hash * 31 + processorType.charCodeAt(i)) >>> 0;
   }
 
-  return codecChipColors[hash % codecChipColors.length];
+  return processorChipClasses[hash % processorChipClasses.length];
 };
 
 export const kindTone = (kind?: CodecTraceNode["kind"]): Tone => {
@@ -163,7 +172,7 @@ export const kindTone = (kind?: CodecTraceNode["kind"]): Tone => {
     case "MAP_ENTRY_ITEM":
       return "primary";
     case "LENGTH_FIELD":
-      return "danger";
+      return "warning";
     default:
       return "default";
   }
