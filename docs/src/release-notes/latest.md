@@ -5,6 +5,27 @@ article: false
 
 # Latest
 
+## 0.9.0 (2026-08-22)
+
+### ⭐ New Features
+
+- 新增结构化编解码跟踪能力，记录字段、集合、Map、长度字段等节点的编解码结果、字节范围和状态
+- JT/T 808 调试面板新增编解码 Trace 查看、原始字节预览和结果详情展示
+
+### 🚀 Improvements
+
+- 重构 `CodecTracker`，统一编码和解码跟踪模型，并增强失败诊断与嵌套字段定位能力
+- 调试面板支持更丰富的消息编辑、JSON 查看和 Trace 节点检查
+
+### 🔨 Dependency Updates
+
+- Gradle Wrapper 升级至 `9.7.1`
+
+### ❤️ Contributors
+
+- [OpenAI Codex](https://openai.com/codex/)
+- [@hylexus](https://github.com/hylexus)
+
 ## 0.8.0 (2026-08-09)
 
 ### 📔 Documentation
