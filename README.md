@@ -99,9 +99,11 @@
 docker run -it --rm -p 8888:8888 registry.cn-hangzhou.aliyuncs.com/xtream-codec/jt-808-server-quick-start-with-dashboard:latest
 ```
 
-启动后访问: [http://localhost:8888/dashboard-ui/](http://localhost:8888/dashboard-ui/) ，首页截图如下：
+启动后访问: [http://localhost:8888/dashboard-ui/](http://localhost:8888/dashboard-ui/)
 
-![jt-808-docker-quickstart.png](docs/src/.vuepress/public/img/readme/jt-808-docker-quickstart.png)
+| 首页                                                                                               | 编解码调试                                                                                     |
+|----------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
+| ![jt-808-docker-quickstart.png](docs/src/.vuepress/public/img/readme/jt-808-docker-quickstart.png) | ![jt-808-dashboard-debug.png](docs/src/.vuepress/public/img/readme/jt-808-dashboard-debug.png) |
 
 ## Roadmap / 版本路线图
 
