@@ -22,7 +22,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.annotation.JsonTypeIdResolver;
-import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.common.utils.XtreamBytes;
 import io.github.hylexus.xtream.codec.common.utils.XtreamConstants;
 import io.github.hylexus.xtream.codec.core.DataFieldEncoder;
@@ -31,7 +30,6 @@ import io.github.hylexus.xtream.codec.core.FieldCodecRegistry;
 import io.github.hylexus.xtream.codec.core.annotation.PrependLengthFieldType;
 import io.github.hylexus.xtream.codec.core.annotation.ext.KeyType;
 import io.github.hylexus.xtream.codec.core.annotation.ext.LengthFieldType;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.type.PaddingConfig;
 import io.netty.buffer.ByteBuf;
@@ -125,9 +123,8 @@ public sealed interface DataField extends FieldCodecRegistry.AtomicDataType {
         default void encodeWithTracker(ByteBuf output, CodecTracker codecTracker, String fieldName) {
             final int indexBeforeWrite = output.writerIndex();
             this.encode(output);
-            final String hexString = FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite);
-            try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.FIELD, fieldName, this.getClass().getTypeName(), this.getClass().getSimpleName(), "", indexBeforeWrite)) {
-                scope.complete(this.value(), hexString, output.writerIndex());
+            try (final CodecTracker.TraceScope scope = codecTracker.enterField(fieldName, this.getClass(), this.getClass(), "", indexBeforeWrite)) {
+                scope.complete(this.value(), output, output.writerIndex());
             }
         }
 
@@ -150,9 +147,8 @@ public sealed interface DataField extends FieldCodecRegistry.AtomicDataType {
         static DictKey deserializeWithTracker(CodecTracker codecTracker, KeyType keyType, ByteBuf input, int sizeInBytes, String charset, String fieldName) {
             final int readerIndex = input.readerIndex();
             final DictKey key = DictKey.deserialize(keyType, input, sizeInBytes, charset);
-            final String hexString = FormatUtils.toHexString(input, readerIndex, input.readerIndex() - readerIndex);
-            try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.FIELD, fieldName, key.getClass().getTypeName(), DictKey.class.getSimpleName(), "", readerIndex)) {
-                scope.complete(key, hexString, input.readerIndex());
+            try (final CodecTracker.TraceScope scope = codecTracker.enterField(fieldName, key.getClass(), DictKey.class, "", readerIndex)) {
+                scope.complete(key, input, input.readerIndex());
             }
             return key;
         }

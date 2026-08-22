@@ -41,9 +41,8 @@ public enum LengthFieldType {
     public void writeToWithTracker(ByteBuf output, long value, CodecTracker codecTracker, String fieldName) {
         final int writerIndex = output.writerIndex();
         this.writeTo(output, value);
-        final String hexString = FormatUtils.toHexString(output, writerIndex, output.writerIndex() - writerIndex);
-        try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.LENGTH_FIELD, fieldName, long.class.getTypeName(), this.getDeclaringClass().getSimpleName(), "", writerIndex)) {
-            scope.complete(value, hexString, output.writerIndex());
+        try (final CodecTracker.TraceScope scope = codecTracker.enterLengthField(fieldName, long.class.getTypeName(), this.getDeclaringClass().getSimpleName(), "", writerIndex)) {
+            scope.complete(value, output, output.writerIndex());
         }
     }
 
@@ -60,9 +59,8 @@ public enum LengthFieldType {
     public Number readFromWithTracker(ByteBuf input, CodecTracker codecTracker, String fieldName) {
         final int readerIndex = input.readerIndex();
         final Number number = this.readFrom(input);
-        final String hexString = FormatUtils.toHexString(input, readerIndex, input.readerIndex() - readerIndex);
-        try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.LENGTH_FIELD, fieldName, Number.class.getTypeName(), LengthFieldType.class.getSimpleName(), "", readerIndex)) {
-            scope.complete(number, hexString, input.readerIndex());
+        try (final CodecTracker.TraceScope scope = codecTracker.enterLengthField(fieldName, Number.class.getTypeName(), LengthFieldType.class.getSimpleName(), "", readerIndex)) {
+            scope.complete(number, input, input.readerIndex());
         }
         return number;
     }

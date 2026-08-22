@@ -18,7 +18,6 @@ package io.github.hylexus.xtream.codec.core.impl.codec.pair;
 
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
 import io.github.hylexus.xtream.codec.common.exception.NotYetImplementedException;
-import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.core.BeanMetadataRegistry;
 import io.github.hylexus.xtream.codec.core.ExtendMetaRegistry;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
@@ -27,7 +26,6 @@ import io.github.hylexus.xtream.codec.core.impl.codec.StringFieldCodecs;
 import io.github.hylexus.xtream.codec.core.impl.domain.KeyMeta;
 import io.github.hylexus.xtream.codec.core.impl.domain.ValueMatcherMeta;
 import io.github.hylexus.xtream.codec.core.impl.domain.XtreamPairFieldSequenceMeta;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.type.Pair;
 import io.github.hylexus.xtream.codec.core.type.simple.DataField;
@@ -98,7 +96,7 @@ public class PairCodecs {
             }
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
             final int parentIndexBeforeWrite = output.writerIndex();
-            try (final CodecTracker.TraceScope collectionScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION, propertyMetadata.name(), propertyMetadata.field().getType().getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), parentIndexBeforeWrite)) {
+            try (final CodecTracker.TraceScope collectionScope = codecTracker.enterCollection(propertyMetadata, propertyMetadata.field().getType(), this.getClass(), parentIndexBeforeWrite)) {
                 int sequence = 0;
                 for (Pair pair : pairList) {
                     if (pair == null) {
@@ -106,15 +104,14 @@ public class PairCodecs {
                     }
 
                     final int indexBeforeWrite = output.writerIndex();
-                    try (final CodecTracker.TraceScope itemScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION_ITEM, propertyMetadata.name() + "[" + sequence + "]", Pair.class.getTypeName(), this.getClass().getSimpleName(), null, indexBeforeWrite)) {
-                        itemScope.node().putAttribute("itemIndex", sequence++);
+                    try (final CodecTracker.TraceScope itemScope = codecTracker.enterCollectionItem(propertyMetadata.name(), sequence++, Pair.class, this.getClass(), indexBeforeWrite)) {
 
                         encodePairWithTracker(context, output, pair, codecTracker, this.getClass().getSimpleName());
 
-                        itemScope.complete(null, FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), output.writerIndex());
+                        itemScope.complete(null, output, output.writerIndex());
                     }
                 }
-                collectionScope.complete(pairList, FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite), output.writerIndex());
+                collectionScope.complete(pairList, output, output.writerIndex());
             }
         }
 
@@ -163,14 +160,13 @@ public class PairCodecs {
             final Map<Object, ValueMatcherMeta> valueMatchersByKey = meta.decoder().valueMatchers().valueMatchersByKey();
             int iterationTimes = propertyMetadata.iterationTimesExtractor().extractIterationTimes(context, context.evaluationContext());
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            try (final CodecTracker.TraceScope collectionScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION, propertyMetadata.name(), propertyMetadata.field().getType().getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), inputReaderIndexBeforeSlice)) {
+            try (final CodecTracker.TraceScope collectionScope = codecTracker.enterCollection(propertyMetadata, propertyMetadata.field().getType(), this.getClass(), inputReaderIndexBeforeSlice)) {
                 int sequence = 0;
                 try (final CodecTracker.CoordinateScope ignored = length > 0 ? codecTracker.openCoordinateBase(inputReaderIndexBeforeSlice) : null) {
                     final int parentIndexBeforeRead = slice.readerIndex();
 
                     while (slice.isReadable() && iterationTimes-- > 0) {
-                        try (final CodecTracker.TraceScope itemScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION_ITEM, propertyMetadata.name() + "[" + sequence + "]", Pair.class.getTypeName(), this.getClass().getSimpleName(), null, slice.readerIndex())) {
-                            itemScope.node().putAttribute("itemIndex", sequence++);
+                        try (final CodecTracker.TraceScope itemScope = codecTracker.enterCollectionItem(propertyMetadata.name(), sequence++, Pair.class, this.getClass(), slice.readerIndex())) {
 
                             final int indexBeforeRead = slice.readerIndex();
                             // 1. key
@@ -185,7 +181,7 @@ public class PairCodecs {
                                     remainingHex = StringFieldCodecs.INSTANCE_HEX.deserializeWithTracker(propertyMetadata, context, slice, slice.readableBytes());
                                 }
                                 results.add(new Pair(key, null, remainingHex));
-                                itemScope.complete(null, FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead), slice.readerIndex());
+                                itemScope.complete(null, slice, indexBeforeRead, slice.readerIndex());
                                 break;
                             } else {
                                 final int valueLength = valueMatcherMeta.length();
@@ -199,11 +195,11 @@ public class PairCodecs {
                                 }
                                 final Pair pair = new Pair(key, value);
                                 results.add(pair);
-                                itemScope.complete(pair, FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead), slice.readerIndex());
+                                itemScope.complete(pair, slice, indexBeforeRead, slice.readerIndex());
                             }
                         }
                     }
-                    collectionScope.complete(results, FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead), slice.readerIndex());
+                    collectionScope.complete(results, slice, parentIndexBeforeRead, slice.readerIndex());
                 }
             }
             return results;
@@ -235,9 +231,9 @@ public class PairCodecs {
             }
         } else {
             final int index = output.writerIndex();
-            try (final CodecTracker.TraceScope valueScope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, "value", value.getClass().getTypeName(), fieldCodec, "", index)) {
+            try (final CodecTracker.TraceScope valueScope = codecTracker.enterNestedField("value", value.getClass().getTypeName(), fieldCodec, "", index)) {
                 context.entityEncoder().encodeWithTracker(value, output, codecTracker);
-                valueScope.complete(value, FormatUtils.toHexString(output, index, output.writerIndex() - index), output.writerIndex());
+                valueScope.complete(value, output, output.writerIndex());
             }
         }
     }

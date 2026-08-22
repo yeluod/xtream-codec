@@ -18,7 +18,6 @@ package io.github.hylexus.xtream.codec.common.bean.impl;
 
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
 import io.github.hylexus.xtream.codec.common.exception.BeanIntrospectionException;
-import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.common.utils.XtreamTypes;
 import io.github.hylexus.xtream.codec.core.BeanMetadataRegistry;
 import io.github.hylexus.xtream.codec.core.ContainerInstanceFactory;
@@ -28,7 +27,6 @@ import io.github.hylexus.xtream.codec.core.annotation.NumberSignedness;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamFieldMapDescriptor;
 import io.github.hylexus.xtream.codec.core.impl.codec.DelegateBeanMetadataFieldCodec;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.utils.BeanUtils;
 import io.netty.buffer.ByteBuf;
@@ -125,13 +123,12 @@ public class MapBeanPropertyMetadata extends BasicBeanPropertyMetadata {
                 : input.readSlice(length);
         final CodecTracker codecTracker = requireNonNull(context.codecTracker());
         @SuppressWarnings({"unchecked"}) final Map<Object, @Nullable Object> map = (Map<Object, Object>) this.containerInstanceFactory().create();
-        try (final CodecTracker.TraceScope mapScope = codecTracker.enterScope(CodecTraceNodeKind.MAP, this, this.getClass(), inputReaderIndexBeforeSlice)) {
+        try (final CodecTracker.TraceScope mapScope = codecTracker.enterMap(this, this.getClass(), inputReaderIndexBeforeSlice)) {
             int sequence = 0;
             try (final CodecTracker.CoordinateScope ignored = length >= 0 ? codecTracker.openCoordinateBase(inputReaderIndexBeforeSlice) : null) {
                 while (slice.isReadable()) {
                     final int indexBeforeRead = slice.readerIndex();
-                    try (final CodecTracker.TraceScope entryScope = codecTracker.enterScope(CodecTraceNodeKind.MAP_ENTRY, "[" + sequence + "]", null, null, null, indexBeforeRead)) {
-                        entryScope.node().putAttribute("fieldName", this.name()).putAttribute("itemIndex", sequence++);
+                    try (final CodecTracker.TraceScope entryScope = codecTracker.enterMapEntry(this.name(), sequence++, indexBeforeRead)) {
 
                         // 1. key(i8,u8,i16,u16,i32,u32,i64,string)
                         final Object key;
@@ -156,11 +153,11 @@ public class MapBeanPropertyMetadata extends BasicBeanPropertyMetadata {
                                 final CodecTracker.CoordinateScope ignoredValue = codecTracker.openCoordinateBase(valueIndexBeforeRead)) {
                             value = valueFieldCodec.deserializeWithTracker(this, context, byteBuf, valueLength);
                         }
-                        entryScope.complete(null, FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead), slice.readerIndex());
+                        entryScope.complete(null, slice, indexBeforeRead, slice.readerIndex());
                         map.put(key, value);
                     }
                 }
-                mapScope.complete(map, FormatUtils.toHexString(slice, 0, slice.readerIndex()), slice.readerIndex());
+                mapScope.complete(map, slice, 0, slice.readerIndex());
             }
         }
         return map;
@@ -212,12 +209,10 @@ public class MapBeanPropertyMetadata extends BasicBeanPropertyMetadata {
             @SuppressWarnings("unchecked") final Map<Object, Object> map = (Map<Object, Object>) value;
             final CodecTracker codecTracker = requireNonNull(context.codecTracker());
             final int mapStart = output.writerIndex();
-            try (final CodecTracker.TraceScope mapScope = codecTracker.enterScope(CodecTraceNodeKind.MAP, this, this.getClass(), mapStart)) {
-                final int parenIndexBeforeWrite = output.writerIndex();
+            try (final CodecTracker.TraceScope mapScope = codecTracker.enterMap(this, this.getClass(), mapStart)) {
                 for (final Map.Entry<Object, Object> entry : map.entrySet()) {
                     final int writerIndex = output.writerIndex();
-                    try (final CodecTracker.TraceScope entryScope = codecTracker.enterScope(CodecTraceNodeKind.MAP_ENTRY, "[" + sequence + "]", null, null, null, writerIndex)) {
-                        entryScope.node().putAttribute("fieldName", this.name()).putAttribute("itemIndex", sequence++);
+                    try (final CodecTracker.TraceScope entryScope = codecTracker.enterMapEntry(this.name(), sequence++, writerIndex)) {
 
                         // 1. key(i8,u8,i16,u16,i32,u32,i64,string)
                         final Object key = entry.getKey();
@@ -245,11 +240,11 @@ public class MapBeanPropertyMetadata extends BasicBeanPropertyMetadata {
                         // 3. value(dynamic)
                         valueCheckpoint.relocateNewChildren(output.writerIndex());
                         output.writeBytes(temp);
-                        entryScope.complete(null, FormatUtils.toHexString(output, writerIndex, output.writerIndex() - writerIndex), output.writerIndex());
+                        entryScope.complete(null, output, output.writerIndex());
                         temp.clear();
                     }
                 }
-                mapScope.complete(value, FormatUtils.toHexString(output, parenIndexBeforeWrite, output.writerIndex() - parenIndexBeforeWrite), output.writerIndex());
+                mapScope.complete(value, output, output.writerIndex());
             }
         } finally {
             temp.release();

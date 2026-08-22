@@ -255,7 +255,7 @@ class CodecTraceTest {
         tracker.beginEncode(0, "Example");
         try (final CodecTracker.TraceScope scope = tracker.enterScope(
                 CodecTraceNodeKind.FIELD, "value", "byte", "U8FieldCodec", "值", 1)) {
-            scope.complete(2, null, 2);
+            scope.completeWithHex(2, null, 2);
         }
         tracker.finishTrace("0102", 2);
 

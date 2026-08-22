@@ -17,13 +17,11 @@
 package io.github.hylexus.xtream.codec.core.impl.codec.tlv;
 
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
-import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.core.BeanMetadataRegistry;
 import io.github.hylexus.xtream.codec.core.ExtendMetaRegistry;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
 import io.github.hylexus.xtream.codec.core.impl.DefaultExtendMetaRegistry;
 import io.github.hylexus.xtream.codec.core.impl.domain.*;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.type.FieldLength;
 import io.github.hylexus.xtream.codec.core.type.TLV;
@@ -124,20 +122,19 @@ public class TLVCodecs {
 
             int iterationTimes = propertyMetadata.iterationTimesExtractor().extractIterationTimes(context, context.evaluationContext());
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            try (final CodecTracker.TraceScope collectionScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION, propertyMetadata.name(), propertyMetadata.field().getType().getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), inputReaderIndexBeforeSlice)) {
+            try (final CodecTracker.TraceScope collectionScope = codecTracker.enterCollection(propertyMetadata, propertyMetadata.field().getType(), this.getClass(), inputReaderIndexBeforeSlice)) {
                 int sequence = 0;
                 try (final CodecTracker.CoordinateScope ignored = length > 0 ? codecTracker.openCoordinateBase(inputReaderIndexBeforeSlice) : null) {
                     final int parentIndexBeforeRead = slice.readerIndex();
                     while (slice.isReadable() && iterationTimes-- > 0) {
                         final int indexBeforeRead = slice.readerIndex();
-                        try (final CodecTracker.TraceScope itemScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION_ITEM, propertyMetadata.name() + "[" + sequence + "]", TLV.class.getTypeName(), this.getClass().getSimpleName(), null, indexBeforeRead)) {
-                            itemScope.node().putAttribute("itemIndex", sequence++);
+                        try (final CodecTracker.TraceScope itemScope = codecTracker.enterCollectionItem(propertyMetadata.name(), sequence++, TLV.class, this.getClass(), indexBeforeRead)) {
                             final TLV tlv = decodeTlvWithTracker(codecTracker, propertyMetadata, context, slice, keyMeta, lengthMeta, valueMatchersByKey, fallbackValueMatcherMeta);
                             results.add(tlv);
-                            itemScope.complete(tlv, FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead), slice.readerIndex());
+                            itemScope.complete(tlv, slice, indexBeforeRead, slice.readerIndex());
                         }
                     }
-                    collectionScope.complete(results, FormatUtils.toHexString(slice, parentIndexBeforeRead, slice.readerIndex() - parentIndexBeforeRead), slice.readerIndex());
+                    collectionScope.complete(results, slice, parentIndexBeforeRead, slice.readerIndex());
                 }
             }
 
@@ -170,7 +167,7 @@ public class TLVCodecs {
 
             final int parentIndexBeforeWrite = output.writerIndex();
             final CodecTracker codecTracker = requireNonNull(context.codecTracker());
-            try (final CodecTracker.TraceScope collectionScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION, propertyMetadata.name(), propertyMetadata.field().getType().getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), parentIndexBeforeWrite)) {
+            try (final CodecTracker.TraceScope collectionScope = codecTracker.enterCollection(propertyMetadata, propertyMetadata.field().getType(), this.getClass(), parentIndexBeforeWrite)) {
                 int sequence = 0;
                 final ByteBuf temp = context.bufferFactory().buffer();
                 try {
@@ -180,14 +177,13 @@ public class TLVCodecs {
                         }
 
                         final int indexBeforeWrite = output.writerIndex();
-                        try (final CodecTracker.TraceScope itemScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION_ITEM, propertyMetadata.name() + "[" + sequence + "]", TLV.class.getTypeName(), this.getClass().getSimpleName(), null, indexBeforeWrite)) {
-                            itemScope.node().putAttribute("itemIndex", sequence++);
+                        try (final CodecTracker.TraceScope itemScope = codecTracker.enterCollectionItem(propertyMetadata.name(), sequence++, TLV.class, this.getClass(), indexBeforeWrite)) {
                             encodeTlvWithTracker(context, output, tlv, codecTracker, temp, this.getClass().getSimpleName());
-                            itemScope.complete(tlv, FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), output.writerIndex());
+                            itemScope.complete(tlv, output, output.writerIndex());
                         }
                     }
 
-                    collectionScope.complete(tlvIterable, FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite), output.writerIndex());
+                    collectionScope.complete(tlvIterable, output, output.writerIndex());
                 } finally {
                     temp.release();
                 }
@@ -237,11 +233,11 @@ public class TLVCodecs {
             valueLength.setValue(temp.readableBytes());
         } else {
             final int indexBeforeWrite = temp.writerIndex();
-            try (final CodecTracker.TraceScope valueScope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, "value", tlv.value().getClass().getTypeName(), fieldCodec, "", indexBeforeWrite)) {
+            try (final CodecTracker.TraceScope valueScope = codecTracker.enterNestedField("value", tlv.value().getClass().getTypeName(), fieldCodec, "", indexBeforeWrite)) {
                 try (final CodecTracker.TemporaryBufferScope ignored = codecTracker.openTemporaryBuffer()) {
                     context.entityEncoder().encodeWithTracker(tlv.value(), temp, codecTracker);
                     valueLength.setValue(temp.readableBytes());
-                    valueScope.complete(tlv.value(), FormatUtils.toHexString(temp, indexBeforeWrite, temp.writerIndex() - indexBeforeWrite), temp.writerIndex());
+                    valueScope.complete(tlv.value(), temp, temp.writerIndex());
                 }
             }
         }

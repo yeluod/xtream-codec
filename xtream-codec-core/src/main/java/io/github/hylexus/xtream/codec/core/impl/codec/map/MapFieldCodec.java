@@ -18,7 +18,6 @@ package io.github.hylexus.xtream.codec.core.impl.codec.map;
 
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
 import io.github.hylexus.xtream.codec.common.exception.NotYetImplementedException;
-import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.common.utils.XtreamAssertions;
 import io.github.hylexus.xtream.codec.common.utils.XtreamBytes;
 import io.github.hylexus.xtream.codec.common.utils.XtreamTypes;
@@ -34,7 +33,6 @@ import io.github.hylexus.xtream.codec.core.impl.codec.map.SimpleMapMetadataRegis
 import io.github.hylexus.xtream.codec.core.impl.codec.map.SimpleMapMetadataRegistry.MapMeta;
 import io.github.hylexus.xtream.codec.core.impl.domain.KeyMeta;
 import io.github.hylexus.xtream.codec.core.impl.domain.ValueMatcherMeta;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.github.hylexus.xtream.codec.core.utils.BeanUtils;
 import io.netty.buffer.ByteBuf;
@@ -122,7 +120,7 @@ public class MapFieldCodec extends AbstractFieldCodec<Object> {
 
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
         final int parenIndexBeforeWrite = output.writerIndex();
-        try (final CodecTracker.TraceScope mapScope = codecTracker.enterScope(CodecTraceNodeKind.MAP, propertyMetadata, this.getClass(), parenIndexBeforeWrite)) {
+        try (final CodecTracker.TraceScope mapScope = codecTracker.enterMap(propertyMetadata, this.getClass(), parenIndexBeforeWrite)) {
             final FieldCodec<Object> keyCodec = mapMeta.keyMeta().codec();
             final FieldCodec<Object> valueLengthCodec = mapMeta.valueLengthMeta().codec();
             final SimpleMapMetadataRegistry.EncoderValueMeta encoder = mapMeta.valueMeta().encoder();
@@ -132,8 +130,7 @@ public class MapFieldCodec extends AbstractFieldCodec<Object> {
             try {
                 for (final Map.Entry<Object, Object> entry : map.entrySet()) {
                     final int writerIndex = output.writerIndex();
-                    try (final CodecTracker.TraceScope entryScope = codecTracker.enterScope(CodecTraceNodeKind.MAP_ENTRY, "[" + sequence + "]", null, null, null, writerIndex)) {
-                        entryScope.node().putAttribute("fieldName", propertyMetadata.name()).putAttribute("itemIndex", sequence++);
+                    try (final CodecTracker.TraceScope entryScope = codecTracker.enterMapEntry(propertyMetadata.name(), sequence++, writerIndex)) {
 
                         // 1. key
                         final Object mapKey = entry.getKey();
@@ -149,9 +146,8 @@ public class MapFieldCodec extends AbstractFieldCodec<Object> {
                                 } else {
                                     XtreamBytes.writeCharSequenceWithRightPadding(output, str, keyMeta.resolvedCharset(), keyMeta.sizeInBytes(), keyMeta.paddingElement());
                                 }
-                                final String hexString = FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite);
-                                try (final CodecTracker.TraceScope keyScope = codecTracker.enterScope(CodecTraceNodeKind.FIELD, propertyMetadata.name(), String.class.getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeWrite)) {
-                                    keyScope.complete(str, hexString, output.writerIndex());
+                                try (final CodecTracker.TraceScope keyScope = codecTracker.enterField(propertyMetadata.name(), String.class, this.getClass(), propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeWrite)) {
+                                    keyScope.complete(str, output, output.writerIndex());
                                 }
                             }
                         }
@@ -173,11 +169,11 @@ public class MapFieldCodec extends AbstractFieldCodec<Object> {
                         }
                         valueCheckpoint.relocateNewChildren(output.writerIndex());
                         output.writeBytes(temp);
-                        entryScope.complete(null, FormatUtils.toHexString(output, writerIndex, output.writerIndex() - writerIndex), output.writerIndex());
+                        entryScope.complete(null, output, output.writerIndex());
                         temp.clear();
                     }
                 }
-                mapScope.complete(map, FormatUtils.toHexString(output, parenIndexBeforeWrite, output.writerIndex() - parenIndexBeforeWrite), output.writerIndex());
+                mapScope.complete(map, output, output.writerIndex());
             } finally {
                 temp.release();
             }
@@ -222,7 +218,7 @@ public class MapFieldCodec extends AbstractFieldCodec<Object> {
                 ? input // all remaining
                 : input.readSlice(length);
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        try (final CodecTracker.TraceScope mapScope = codecTracker.enterScope(CodecTraceNodeKind.MAP, propertyMetadata, this.getClass(), inputReaderIndexBeforeSlice)) {
+        try (final CodecTracker.TraceScope mapScope = codecTracker.enterMap(propertyMetadata, this.getClass(), inputReaderIndexBeforeSlice)) {
             @SuppressWarnings({"unchecked"}) final Map<Object, @Nullable Object> map = (Map<Object, Object>) propertyMetadata.containerInstanceFactory().create();
             final SimpleMapMetadataRegistry.MapMeta mapMeta = simpleMapMetadataRegistry.getOrCreateMapMetadata(context, propertyMetadata);
             int sequence = 0;
@@ -234,8 +230,7 @@ public class MapFieldCodec extends AbstractFieldCodec<Object> {
                 while (slice.isReadable()) {
                     // 1. key(i8,u8,i16,u16,i32,u32,i64,string)
                     final int indexBeforeRead = slice.readerIndex();
-                    try (final CodecTracker.TraceScope entryScope = codecTracker.enterScope(CodecTraceNodeKind.MAP_ENTRY, "[" + sequence + "]", null, null, null, indexBeforeRead)) {
-                        entryScope.node().putAttribute("fieldName", propertyMetadata.name()).putAttribute("itemIndex", sequence++);
+                    try (final CodecTracker.TraceScope entryScope = codecTracker.enterMapEntry(propertyMetadata.name(), sequence++, indexBeforeRead)) {
 
                         final Object key;
                         try (final CodecTracker.NodeOverrideScope ignoredKey = codecTracker.overrideNextMapEntryItem(CodecTracker.MapEntryItemType.KEY)) {
@@ -260,11 +255,11 @@ public class MapFieldCodec extends AbstractFieldCodec<Object> {
                                 final CodecTracker.CoordinateScope ignoredValue = codecTracker.openCoordinateBase(valueIndexBeforeRead)) {
                             value = valueFieldCodec.deserializeWithTracker(propertyMetadata, context, byteBuf, valueLength);
                         }
-                        entryScope.complete(null, FormatUtils.toHexString(slice, indexBeforeRead, slice.readerIndex() - indexBeforeRead), slice.readerIndex());
+                        entryScope.complete(null, slice, indexBeforeRead, slice.readerIndex());
                         map.put(key, value);
                     }
                 }
-                mapScope.complete(map, FormatUtils.toHexString(slice, 0, slice.readerIndex()), slice.readerIndex());
+                mapScope.complete(map, slice, 0, slice.readerIndex());
             }
             return map;
         }

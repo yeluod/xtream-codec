@@ -17,6 +17,9 @@
 package io.github.hylexus.xtream.codec.core.tracker;
 
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
+import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
+import io.netty.buffer.ByteBuf;
+import org.jetbrains.annotations.ApiStatus;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayDeque;
@@ -60,8 +63,8 @@ public class CodecTracker {
         return CodecTraceView.from(this.getTrace());
     }
 
-    public boolean isTracing() {
-        return tracing;
+    public boolean isNotTracing() {
+        return !tracing;
     }
 
     public void beginEncode(int rootStartAbsolute, @Nullable String entityClass) {
@@ -86,8 +89,10 @@ public class CodecTracker {
         this.recorder.finish(payloadHex, rootEndAbsolute);
         if (!this.scopes.isEmpty()) {
             final IllegalStateException error = new IllegalStateException("编解码跟踪存在未关闭的 scope");
+            // noinspection resource
             final CodecTraceNode deepestNode = this.scopes.peek().node;
             while (!this.scopes.isEmpty()) {
+                // noinspection resource
                 final TraceScope scope = this.scopes.pop();
                 scope.node.setStatus(CodecTraceStatus.ERROR);
                 scope.completed = true;
@@ -171,17 +176,211 @@ public class CodecTracker {
     }
 
     /**
+     * 创建一个字段 scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterField(BeanPropertyMetadata metadata, Class<?> processorType, int localStart) {
+        return this.enterField(metadata, metadata.rawClass(), processorType, localStart);
+    }
+
+    /**
+     * 创建一个指定 Java 类型的字段 scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterField(BeanPropertyMetadata metadata, Class<?> javaType,
+                                 Class<?> processorType, int localStart) {
+        final CodecTraceNodeKind kind = metadata.isEncodedLength()
+                ? CodecTraceNodeKind.LENGTH_FIELD
+                : CodecTraceNodeKind.FIELD;
+        return this.enterNode(
+                kind,
+                metadata.name(),
+                javaType.getTypeName(),
+                processorType.getSimpleName(),
+                metadata.xtreamFieldAnnotation().desc(),
+                localStart
+        );
+    }
+
+    /**
+     * 创建一个使用 Class 类型信息的字段 scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterField(String name, Class<?> javaType, Class<?> processorType,
+                                 @Nullable String fieldDesc, int localStart) {
+        return this.enterNode(CodecTraceNodeKind.FIELD, name, javaType.getTypeName(),
+                processorType.getSimpleName(), fieldDesc, localStart);
+    }
+
+    /**
+     * 创建一个带字段说明的长度字段 scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterLengthField(String name, String javaType, String processorType,
+                                       @Nullable String fieldDesc, int localStart) {
+        return this.enterNode(CodecTraceNodeKind.LENGTH_FIELD, name, javaType, processorType, fieldDesc, localStart);
+    }
+
+    /**
+     * 创建一个嵌套字段 scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterNestedField(BeanPropertyMetadata metadata, Class<?> processorType, int localStart) {
+        return this.enterNestedField(metadata.name(), metadata.rawClass(), processorType,
+                metadata.xtreamFieldAnnotation().desc(), localStart);
+    }
+
+    /**
+     * 创建一个指定 Java 类型的嵌套字段 scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterNestedField(BeanPropertyMetadata metadata, Class<?> javaType,
+                                       Class<?> processorType, int localStart) {
+        return this.enterNestedField(metadata.name(), javaType, processorType,
+                metadata.xtreamFieldAnnotation().desc(), localStart);
+    }
+
+
+    /**
+     * 创建一个带字段说明的嵌套字段 scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterNestedField(String name, Class<?> javaType, Class<?> processorType,
+                                       @Nullable String fieldDesc, int localStart) {
+        return this.enterNode(CodecTraceNodeKind.NESTED_FIELD, name, javaType.getTypeName(),
+                processorType.getSimpleName(), fieldDesc, localStart);
+    }
+
+    /**
+     * 创建一个带字段说明的嵌套字段 scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterNestedField(String name, String javaType, String processorType,
+                                       @Nullable String fieldDesc, int localStart) {
+        return this.enterNode(CodecTraceNodeKind.NESTED_FIELD, name, javaType, processorType, fieldDesc, localStart);
+    }
+
+    /**
+     * 创建一个指定元素 Java 类型的集合 scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterCollection(BeanPropertyMetadata metadata, Class<?> javaType,
+                                      Class<?> processorType, int localStart) {
+        return this.enterCollection(metadata.name(), javaType.getTypeName(), processorType.getSimpleName(),
+                metadata.xtreamFieldAnnotation().desc(), localStart);
+    }
+
+    /**
+     * 创建一个带字段说明的集合 scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterCollection(String name, String javaType, String processorType,
+                                      @Nullable String fieldDesc, int localStart) {
+        return this.enterNode(CodecTraceNodeKind.COLLECTION, name, javaType, processorType, fieldDesc, localStart);
+    }
+
+    /**
+     * 创建一个集合元素 scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterCollectionItem(String collectionName, int itemIndex,
+                                          Class<?> javaType, int localStart) {
+        return this.enterCollectionItem(collectionName, itemIndex, javaType, null, localStart);
+    }
+
+    /**
+     * 创建一个带处理器类型的集合元素 scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterCollectionItem(String collectionName, int itemIndex,
+                                          Class<?> javaType, @Nullable Class<?> processorType, int localStart) {
+        final TraceScope scope = this.enterNode(CodecTraceNodeKind.COLLECTION_ITEM,
+                collectionName + "[" + itemIndex + "]", javaType.getTypeName(),
+                processorType == null ? null : processorType.getSimpleName(), null, localStart);
+        scope.node().putAttribute("itemIndex", itemIndex);
+        return scope;
+    }
+
+    /**
+     * 创建一个 Map scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterMap(BeanPropertyMetadata metadata, Class<?> processorType, int localStart) {
+        return this.enterMap(metadata.name(), metadata.rawClass().getTypeName(),
+                processorType.getSimpleName(), metadata.xtreamFieldAnnotation().desc(), localStart);
+    }
+
+    /**
+     * 创建一个带字段说明的 Map scope。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterMap(String name, String javaType, String processorType,
+                               @Nullable String fieldDesc, int localStart) {
+        return this.enterNode(CodecTraceNodeKind.MAP, name, javaType, processorType, fieldDesc, localStart);
+    }
+
+    /**
+     * 创建一个 Map entry scope，并写入 entry 常用属性。
+     *
+     * @since 0.9.0
+     */
+    public TraceScope enterMapEntry(@Nullable String fieldName, int itemIndex, int localStart) {
+        final TraceScope scope = this.enterNode(CodecTraceNodeKind.MAP_ENTRY,
+                "[" + itemIndex + "]", null, null, null, localStart);
+        scope.node().putAttribute("fieldName", fieldName).putAttribute("itemIndex", itemIndex);
+        return scope;
+    }
+
+    /**
      * 创建一个内部字段 scope。scope 栈负责维护新节点的父子关系。
      *
      * @apiNote 调用方应使用 try-with-resources 管理生命周期，标准异常收尾由 tracker 统一完成；仅在需要恢复、
      * 删除节点、转换异常或继续执行时显式捕获异常。不要引入 lambda executor、回调模板或通用执行器，
      * 以免隐藏编解码控制流和异常位置。
+     * @since 0.9.0
+     */
+    @ApiStatus.Internal
+    public TraceScope enterScope(CodecTraceNodeKind kind, String name, @Nullable String javaType,
+                                 @Nullable String processorType, @Nullable String fieldDesc, int localStart) {
+        return this.enterNode(kind, name, javaType, processorType, fieldDesc, localStart);
+    }
+
+    /**
+     * 兼容旧的属性元数据入口；新代码应使用具体场景的 enterXxx 方法。
      *
      * @since 0.9.0
      */
-    public TraceScope enterScope(CodecTraceNodeKind kind, String name, @Nullable String javaType,
+    @ApiStatus.Internal
+    public TraceScope enterScope(CodecTraceNodeKind kind, BeanPropertyMetadata metadata,
+                                 Class<?> processorType, int localStart) {
+        return this.enterScope(
+                kind,
+                metadata.name(),
+                metadata.rawClass().getTypeName(),
+                processorType.getSimpleName(),
+                metadata.xtreamFieldAnnotation().desc(),
+                localStart
+        );
+    }
+
+    private TraceScope enterNode(CodecTraceNodeKind kind, String name, @Nullable String javaType,
                                  @Nullable String processorType, @Nullable String fieldDesc, int localStart) {
         final CodecTraceNode parent = this.activeNode();
+        // noinspection resource
         final NodeOverrideScope nodeOverride = this.consumeNodeOverride();
         final MapEntryItemType mapItemType = nodeOverride == null ? null : nodeOverride.mapItemType;
         if (mapItemType != null && parent.getKind() != CodecTraceNodeKind.MAP_ENTRY) {
@@ -206,23 +405,6 @@ public class CodecTracker {
     }
 
     /**
-     * 使用属性元数据创建字段 scope。
-     *
-     * @since 0.7.0
-     */
-    public TraceScope enterScope(CodecTraceNodeKind kind, BeanPropertyMetadata metadata,
-                                 Class<?> processorType, int localStart) {
-        return this.enterScope(
-                kind,
-                metadata.name(),
-                metadata.rawClass().getTypeName(),
-                processorType.getSimpleName(),
-                metadata.xtreamFieldAnnotation().desc(),
-                localStart
-        );
-    }
-
-    /**
      * 创建一个不改变当前 scope 的延迟完成节点。
      *
      * @since 0.9.0
@@ -239,6 +421,7 @@ public class CodecTracker {
     private void completeScope(TraceScope scope, @Nullable Object value, @Nullable String hex, int localEnd) {
         this.requireTopScope(scope);
         this.recorder.completeNode(scope.node, value, hex, scope.coordinateBase, scope.localStart, localEnd);
+        // noinspection resource
         this.scopes.pop();
         scope.completed = true;
     }
@@ -268,14 +451,8 @@ public class CodecTracker {
         scope.completed = true;
     }
 
-    private void discardScope(TraceScope scope) {
-        this.requireTopScope(scope);
-        this.recorder.discardNode(scope.node);
-        this.scopes.pop();
-        scope.completed = true;
-    }
-
     private void requireTopScope(TraceScope scope) {
+        // noinspection resource
         if (this.scopes.peek() != scope) {
             throw new IllegalStateException("Trace scope 的关闭顺序不正确");
         }
@@ -297,6 +474,7 @@ public class CodecTracker {
     }
 
     private CodecTraceNode activeNode() {
+        // noinspection resource
         final TraceScope scope = this.scopes.peek();
         return scope == null ? this.recorder.trace().getRoot() : scope.node;
     }
@@ -311,9 +489,11 @@ public class CodecTracker {
     }
 
     private void closeNodeOverride(NodeOverrideScope scope) {
+        // noinspection resource
         if (this.nodeOverrides.peek() != scope) {
             throw new IllegalStateException("Trace node override 的关闭顺序不正确");
         }
+        // noinspection resource
         this.nodeOverrides.pop();
         scope.closed = true;
     }
@@ -477,10 +657,22 @@ public class CodecTracker {
         }
 
         public TraceScope complete(@Nullable Object value, int localEnd) {
-            return this.complete(value, null, localEnd);
+            if (!this.completed) {
+                CodecTracker.this.completeScope(this, value, null, localEnd);
+            }
+            return this;
         }
 
-        public TraceScope complete(@Nullable Object value, @Nullable String hex, int localEnd) {
+        public TraceScope complete(@Nullable Object value, ByteBuf buffer, int localEnd) {
+            return this.complete(value, buffer, this.localStart, localEnd);
+        }
+
+        public TraceScope complete(@Nullable Object value, ByteBuf buffer, int hexStart, int localEnd) {
+            final String hex = FormatUtils.toHexString(buffer, hexStart, localEnd - hexStart);
+            return this.completeWithHex(value, hex, localEnd);
+        }
+
+        public TraceScope completeWithHex(@Nullable Object value, @Nullable String hex, int localEnd) {
             if (!this.completed) {
                 CodecTracker.this.completeScope(this, value, hex, localEnd);
             }
@@ -490,13 +682,6 @@ public class CodecTracker {
         public TraceScope fail(Throwable throwable, int localOffset) {
             if (!this.completed) {
                 CodecTracker.this.failScope(this, throwable, localOffset);
-            }
-            return this;
-        }
-
-        public TraceScope discard() {
-            if (!this.completed) {
-                CodecTracker.this.discardScope(this);
             }
             return this;
         }

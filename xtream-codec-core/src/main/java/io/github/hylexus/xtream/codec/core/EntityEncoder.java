@@ -143,7 +143,7 @@ public class EntityEncoder {
         }
         final FieldCodec.SerializeContext context = new DefaultSerializeContext(this.bufferFactory, this, instance, version, this.beanMetadataRegistry, tracker);
         final int indexBeforeWrite = target.writerIndex();
-        final boolean rootInvocation = !tracker.isTracing();
+        final boolean rootInvocation = tracker.isNotTracing();
         if (rootInvocation) {
             tracker.beginEncode(indexBeforeWrite, beanMetadata.getRawType().getName());
         }

@@ -17,10 +17,8 @@
 package io.github.hylexus.xtream.codec.core.impl.codec;
 
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
-import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.common.utils.XtreamTypes;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.netty.buffer.ByteBuf;
 import org.jspecify.annotations.Nullable;
@@ -58,9 +56,9 @@ public class EntityFieldCodec<E> implements FieldCodec<Object> {
         final int indexBeforeRead = input.readerIndex();
 
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, propertyMetadata.name(), this.entityClass.getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeRead)) {
+        try (final CodecTracker.TraceScope scope = codecTracker.enterNestedField(propertyMetadata, this.entityClass, this.getClass(), indexBeforeRead)) {
             final Object value = context.entityDecoder().decodeWithTracker(context.version(), this.entityClass, input, codecTracker);
-            scope.complete(value, FormatUtils.toHexString(input, indexBeforeRead, input.readerIndex() - indexBeforeRead), input.readerIndex());
+            scope.complete(value, input, input.readerIndex());
             return value;
         }
     }
@@ -74,9 +72,9 @@ public class EntityFieldCodec<E> implements FieldCodec<Object> {
     public void serializeWithTracker(BeanPropertyMetadata propertyMetadata, SerializeContext context, ByteBuf output, @Nullable Object instance) {
         final int indexBeforeWrite = output.writerIndex();
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, propertyMetadata.name(), this.entityClass.getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), indexBeforeWrite)) {
+        try (final CodecTracker.TraceScope scope = codecTracker.enterNestedField(propertyMetadata, this.entityClass, this.getClass(), indexBeforeWrite)) {
             context.entityEncoder().encodeWithTracker(context.version(), instance, output, codecTracker);
-            scope.complete(instance, FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), output.writerIndex());
+            scope.complete(instance, output, output.writerIndex());
         }
     }
 

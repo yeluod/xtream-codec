@@ -18,14 +18,12 @@ package io.github.hylexus.xtream.codec.core.impl.codec;
 
 import io.github.hylexus.xtream.codec.common.bean.BeanMetadata;
 import io.github.hylexus.xtream.codec.common.bean.BeanPropertyMetadata;
-import io.github.hylexus.xtream.codec.common.utils.FormatUtils;
 import io.github.hylexus.xtream.codec.common.utils.XtreamTypes;
 import io.github.hylexus.xtream.codec.core.EntityDecoder;
 import io.github.hylexus.xtream.codec.core.EntityEncoder;
 import io.github.hylexus.xtream.codec.core.FieldCodec;
 import io.github.hylexus.xtream.codec.core.RuntimeTypeSupplier;
 import io.github.hylexus.xtream.codec.core.annotation.XtreamField;
-import io.github.hylexus.xtream.codec.core.tracker.CodecTraceNodeKind;
 import io.github.hylexus.xtream.codec.core.tracker.CodecTracker;
 import io.netty.buffer.ByteBuf;
 import org.jspecify.annotations.Nullable;
@@ -94,7 +92,7 @@ public class RuntimeTypeFieldCodec extends AbstractFieldCodec<Object> {
             final int sliceStart = slice.readerIndex();
             final BeanMetadata beanMetadata = entityDecoder.getBeanMetadataRegistry().getBeanMetadata(targetClass, context.version());
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, propertyMetadata.name(), targetClass.getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), inputReaderIndexBeforeSlice)) {
+            try (final CodecTracker.TraceScope scope = codecTracker.enterNestedField(propertyMetadata, targetClass, this.getClass(), inputReaderIndexBeforeSlice)) {
                 final Object value;
                 if (length < 0) {
                     value = entityDecoder.decodeWithTracker(beanMetadata, slice, codecTracker);
@@ -103,7 +101,7 @@ public class RuntimeTypeFieldCodec extends AbstractFieldCodec<Object> {
                         value = entityDecoder.decodeWithTracker(beanMetadata, slice, codecTracker);
                     }
                 }
-                scope.complete(value, FormatUtils.toHexString(slice, sliceStart, slice.readerIndex() - sliceStart), input.readerIndex());
+                scope.complete(value, slice, sliceStart, slice.readerIndex());
                 return value;
             }
         }
@@ -148,10 +146,10 @@ public class RuntimeTypeFieldCodec extends AbstractFieldCodec<Object> {
             codec.serializeWithTracker(propertyMetadata, context, output, value);
         } else {
             final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-            try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, propertyMetadata.name(), targetClass.getTypeName(), this.getClass().getSimpleName(), propertyMetadata.xtreamFieldAnnotation().desc(), parentIndexBeforeWrite)) {
+            try (final CodecTracker.TraceScope scope = codecTracker.enterNestedField(propertyMetadata, targetClass, this.getClass(), parentIndexBeforeWrite)) {
                 final BeanMetadata beanMetadata = entityEncoder.getBeanMetadataRegistry().getBeanMetadata(targetClass, context.version());
                 entityEncoder.encodeWithTracker(beanMetadata, value, output, codecTracker);
-                scope.complete(value, FormatUtils.toHexString(output, parentIndexBeforeWrite, output.writerIndex() - parentIndexBeforeWrite), output.writerIndex());
+                scope.complete(value, output, output.writerIndex());
             }
         }
     }

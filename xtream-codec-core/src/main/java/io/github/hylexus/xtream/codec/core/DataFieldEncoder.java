@@ -225,17 +225,17 @@ public class DataFieldEncoder {
             case DataField.Struct struct -> {
                 final List<DataField> value = struct.value();
                 final DefaultSerializeContext newContext = new DefaultSerializeContext(context, value);
-                try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, name, dataField.type(), this.getClass().getSimpleName(), "", indexBeforeWrite)) {
+                try (final CodecTracker.TraceScope scope = codecTracker.enterNestedField(name, dataField.type(), this.getClass().getSimpleName(), "", indexBeforeWrite)) {
                     this.encodeWithTracker(newContext, value, output);
-                    scope.complete(dataField.value(), FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), output.writerIndex());
+                    scope.complete(dataField.value(), output, output.writerIndex());
                 }
             }
             case DataField.Sequence sequence -> {
                 final List<DataField> value = sequence.value();
                 final DefaultSerializeContext newContext = new DefaultSerializeContext(context, value);
-                try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION, name, dataField.type(), this.getClass().getSimpleName(), "", indexBeforeWrite)) {
+                try (final CodecTracker.TraceScope scope = codecTracker.enterCollection(name, dataField.type(), this.getClass().getSimpleName(), "", indexBeforeWrite)) {
                     this.encodeWithTracker(newContext, value, output);
-                    scope.complete(dataField.value(), FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), output.writerIndex());
+                    scope.complete(dataField.value(), output, output.writerIndex());
                 }
             }
             case DataField.Dict<?> simpleMap -> {
@@ -243,11 +243,10 @@ public class DataFieldEncoder {
                 final Map<? extends DataField.DictKey, DataField> map = simpleMap.value();
                 final ByteBuf temp = context.bufferFactory().buffer();
                 int sequence = 0;
-                try (final CodecTracker.TraceScope mapScope = codecTracker.enterScope(CodecTraceNodeKind.MAP, name, dataField.type(), this.getClass().getSimpleName(), "", indexBeforeWrite)) {
+                try (final CodecTracker.TraceScope mapScope = codecTracker.enterMap(name, dataField.type(), this.getClass().getSimpleName(), "", indexBeforeWrite)) {
                     for (Map.Entry<? extends DataField.DictKey, DataField> entry : map.entrySet()) {
                         final int entryStart = output.writerIndex();
-                        try (final CodecTracker.TraceScope entryScope = codecTracker.enterScope(CodecTraceNodeKind.MAP_ENTRY, "[" + sequence + "]", null, null, null, entryStart)) {
-                            entryScope.node().putAttribute("fieldName", name).putAttribute("itemIndex", sequence++);
+                        try (final CodecTracker.TraceScope entryScope = codecTracker.enterMapEntry(name, sequence++, entryStart)) {
 
                             // 1. key
                             final DataField.DictKey key = entry.getKey();
@@ -269,12 +268,12 @@ public class DataFieldEncoder {
                             }
                             valueCheckpoint.relocateNewChildren(output.writerIndex());
                             output.writeBytes(temp);
-                            entryScope.complete(null, FormatUtils.toHexString(output, entryStart, output.writerIndex() - entryStart), output.writerIndex());
+                            entryScope.complete(null, output, output.writerIndex());
                         } finally {
                             temp.clear();
                         }
                     }
-                    mapScope.complete(dataField.value(), FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), output.writerIndex());
+                    mapScope.complete(dataField.value(), output, output.writerIndex());
                 } finally {
                     temp.release();
                 }
@@ -282,7 +281,7 @@ public class DataFieldEncoder {
             case DataField.TlvDataField tlvDataField -> {
                 final DefaultSerializeContext newContext =
                         new DefaultSerializeContext(context, tlvDataField);
-                try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.NESTED_FIELD, name, dataField.type(), this.getClass().getSimpleName(), "", indexBeforeWrite)) {
+                try (final CodecTracker.TraceScope scope = codecTracker.enterNestedField(name, dataField.type(), this.getClass().getSimpleName(), "", indexBeforeWrite)) {
                     // 1. tag
                     final DataField.DictKey tag = tlvDataField.tag();
                     this.doEncodeFieldWithTracker(newContext, output, tag);
@@ -301,7 +300,7 @@ public class DataFieldEncoder {
                         tlvDataField.length().writeToWithTracker(output, valueLength, codecTracker, "valueLength");
                         valueCheckpoint.relocateNewChildren(output.writerIndex());
                         output.writeBytes(temp);
-                        scope.complete(dataField.value(), FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite), output.writerIndex());
+                        scope.complete(dataField.value(), output, output.writerIndex());
                     } finally {
                         temp.release();
                     }
@@ -313,9 +312,8 @@ public class DataFieldEncoder {
                 && !(dataField instanceof DataField.Dict<?>)
                 && !(dataField instanceof DataField.Sequence)
                 && !(dataField instanceof DataField.SimpleTlvDataField<?>)) {
-            final String hexString = FormatUtils.toHexString(output, indexBeforeWrite, output.writerIndex() - indexBeforeWrite);
-            try (final CodecTracker.TraceScope scope = codecTracker.enterScope(CodecTraceNodeKind.FIELD, name, dataField.getClass().getTypeName(), this.getClass().getSimpleName(), dataField.getClass().getSimpleName(), indexBeforeWrite)) {
-                scope.complete(dataField.value(), hexString, output.writerIndex());
+            try (final CodecTracker.TraceScope scope = codecTracker.enterField(name, dataField.getClass(), this.getClass(), dataField.getClass().getSimpleName(), indexBeforeWrite)) {
+                scope.complete(dataField.value(), output, output.writerIndex());
             }
         }
     }

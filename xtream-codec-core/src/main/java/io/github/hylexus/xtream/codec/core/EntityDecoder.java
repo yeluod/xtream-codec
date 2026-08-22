@@ -135,7 +135,7 @@ public class EntityDecoder {
     public <T> T decodeWithTracker(int version, ByteBuf source, BeanMetadata beanMetadata, Object containerInstance, CodecTracker tracker) {
         Objects.requireNonNull(tracker);
         final int indexBeforeRead = source.readerIndex();
-        final boolean rootInvocation = !tracker.isTracing();
+        final boolean rootInvocation = tracker.isNotTracing();
         if (rootInvocation) {
             tracker.beginDecode(indexBeforeRead, beanMetadata.getRawType().getName());
         }

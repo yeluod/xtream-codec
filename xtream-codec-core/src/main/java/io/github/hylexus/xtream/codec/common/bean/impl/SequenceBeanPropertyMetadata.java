@@ -86,7 +86,7 @@ public class SequenceBeanPropertyMetadata extends BasicBeanPropertyMetadata {
         @SuppressWarnings("unchecked") final Collection<@Nullable Object> collection = (Collection<Object>) value;
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
         final int indexBeforeWrite = output.writerIndex();
-        try (final CodecTracker.TraceScope collectionScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION, this.name(), this.nestedBeanPropertyMetadata.rawClass().getTypeName(), this.getClass().getSimpleName(), this.xtreamFieldAnnotation().desc(), indexBeforeWrite)) {
+        try (final CodecTracker.TraceScope collectionScope = codecTracker.enterCollection(this, this.nestedBeanPropertyMetadata.rawClass(), this.getClass(), indexBeforeWrite)) {
             int sequence = 0;
             for (final Object object : collection) {
                 if (object == null) {
@@ -106,8 +106,7 @@ public class SequenceBeanPropertyMetadata extends BasicBeanPropertyMetadata {
                     final Class<?> entityClass = object.getClass();
                     final BeanMetadata beanMetadata = this.beanMetadataRegistry.getBeanMetadata(entityClass, context.version());
                     final int itemStart = output.writerIndex();
-                    try (final CodecTracker.TraceScope itemScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION_ITEM, this.name() + "[" + sequence + "]", entityClass.getTypeName(), null, null, itemStart)) {
-                        itemScope.node().putAttribute("itemIndex", sequence++);
+                    try (final CodecTracker.TraceScope itemScope = codecTracker.enterCollectionItem(this.name(), sequence++, entityClass, itemStart)) {
                         context.entityEncoder().encodeWithTracker(context.version(), beanMetadata, object, output, codecTracker);
                         itemScope.complete(object, output.writerIndex());
                     }
@@ -143,14 +142,13 @@ public class SequenceBeanPropertyMetadata extends BasicBeanPropertyMetadata {
                 : input.readSlice(length);
         int iterationTimes = this.iterationTimesExtractor().extractIterationTimes(context, context.evaluationContext());
         final CodecTracker codecTracker = Objects.requireNonNull(context.codecTracker());
-        try (final CodecTracker.TraceScope collectionScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION, this.name(), this.nestedBeanPropertyMetadata.rawClass().getTypeName(), this.getClass().getSimpleName(), this.xtreamFieldAnnotation().desc(), inputReaderIndexBeforeSlice)) {
+        try (final CodecTracker.TraceScope collectionScope = codecTracker.enterCollection(this, this.nestedBeanPropertyMetadata.rawClass(), this.getClass(), inputReaderIndexBeforeSlice)) {
             @SuppressWarnings("unchecked") final Collection<@Nullable Object> list = (Collection<Object>) this.containerInstanceFactory().create();
             int sequence = 0;
             try (final CodecTracker.CoordinateScope ignored = length >= 0 ? codecTracker.openCoordinateBase(inputReaderIndexBeforeSlice) : null) {
                 while (slice.isReadable() && iterationTimes-- > 0) {
                     final int itemStart = slice.readerIndex();
-                    try (final CodecTracker.TraceScope itemScope = codecTracker.enterScope(CodecTraceNodeKind.COLLECTION_ITEM, this.name() + "[" + sequence + "]", this.nestedBeanPropertyMetadata.rawClass().getTypeName(), null, null, itemStart)) {
-                        itemScope.node().putAttribute("itemIndex", sequence++);
+                    try (final CodecTracker.TraceScope itemScope = codecTracker.enterCollectionItem(this.name(), sequence++, this.nestedBeanPropertyMetadata.rawClass(), itemStart)) {
                         final Object value = nestedBeanPropertyMetadata.decodePropertyValueWithTracker(context, slice);
                         list.add(value);
                         itemScope.complete(value, slice.readerIndex());
