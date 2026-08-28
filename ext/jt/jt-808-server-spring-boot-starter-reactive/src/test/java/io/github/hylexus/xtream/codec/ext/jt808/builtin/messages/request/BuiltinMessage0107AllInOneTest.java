@@ -89,7 +89,7 @@ class BuiltinMessage0107AllInOneTest extends BaseCodecTest {
     private BuiltinMessage0107AllInOne createEntityV2019() {
         return new BuiltinMessage0107AllInOne()
                 .setType((short) 1)
-                .setManufacturerId("12345678901")
+                .setManufacturerId("12345")
                 .setTerminalType("type01234567890123456789012345")
                 .setTerminalId("id1234567890123456789012345678")
                 .setIccid("67890543216789054321")
