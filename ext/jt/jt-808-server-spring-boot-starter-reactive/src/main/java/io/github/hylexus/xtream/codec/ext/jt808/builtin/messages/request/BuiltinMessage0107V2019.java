@@ -43,7 +43,7 @@ public class BuiltinMessage0107V2019 {
     @Preset.JtStyle.Word(desc = "终端类型")
     private int type;
 
-    @Preset.JtStyle.Bytes(length = 11, desc = "制造商ID(11)")
+    @Preset.JtStyle.Bytes(length = 5, desc = "制造商ID(5)")
     private String manufacturerId;
 
     @Preset.JtStyle.Bytes(length = 30, desc = "终端型号(30)")
