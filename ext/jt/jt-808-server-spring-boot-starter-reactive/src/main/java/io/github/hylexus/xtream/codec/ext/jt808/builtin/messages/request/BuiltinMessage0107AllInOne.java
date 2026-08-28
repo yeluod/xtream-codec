@@ -43,8 +43,7 @@ public class BuiltinMessage0107AllInOne {
     @Preset.JtStyle.Word(desc = "终端类型")
     private int type;
 
-    @Preset.JtStyle.Bytes(version = 2019, length = 11, desc = "制造商ID[11](2019)")
-    @Preset.JtStyle.Bytes(version = 2013, length = 5, desc = "制造商ID[5](2013)")
+    @Preset.JtStyle.Bytes(length = 5, desc = "制造商ID[5](2013 || 2019)")
     private String manufacturerId;
 
     @Preset.JtStyle.Bytes(version = 2019, length = 30, desc = "终端型号[30](2019)")
